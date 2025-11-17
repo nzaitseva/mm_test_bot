@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Database  
+*.db
+*.sqlite
+
+# Environment
+.env
+
+# IDE
+.idea/
+
+# Logs
+*.log
+logs/
+
+# System
+.DS_Store
