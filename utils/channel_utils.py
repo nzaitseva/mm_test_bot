@@ -1,5 +1,5 @@
 import re
-from emoji import Emoji as E
+from utils.emoji import Emoji as E
 
 def parse_channel_input(channel_input: str) -> str:
 	"""
