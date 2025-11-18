@@ -41,7 +41,7 @@ async def show_my_tests(message: types.Message):
 		await message.answer(f"{E.POST_BOX} У вас пока нет созданных тестов")
 		return
 
-	text = "📋 Ваши тесты:\n\n"
+	text = f"{E.LIST} Ваши тесты:\n\n"
 	for test_id, title in tests:
 		text += f"{E.STAPLE} {title} (ID: {test_id})\n"
 
