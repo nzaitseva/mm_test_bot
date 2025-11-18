@@ -2,9 +2,13 @@ import asyncio
 import sqlite3
 from datetime import datetime
 import pytz
+import logging
+
 from handlers.user_handlers import send_test_to_channel
 from utils.database import Database
 from utils.emoji import Emoji as E
+
+logger = logging.getLogger(__name__)
 
 
 class SchedulerManager:

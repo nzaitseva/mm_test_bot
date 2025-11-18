@@ -1,8 +1,12 @@
 import sqlite3
 import json
+import logging
+
 from datetime import datetime
 from typing import List, Tuple, Optional
 
+
+logger = logging.getLogger(__name__)
 
 class Database:
 	def __init__(self, db_path="tests.db"):

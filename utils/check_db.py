@@ -1,6 +1,7 @@
-# check_db.py
 import sqlite3
+import logging
 
+logger = logging.getLogger(__name__)
 
 def check_database():
 	conn = sqlite3.connect('tests.db')

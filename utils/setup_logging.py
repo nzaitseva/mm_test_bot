@@ -2,15 +2,16 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-from utils.emoji import Emoji as E
-
-
-# Логи пишутся в файл и выводятся в консоль
 
 def setup_logging():
-
+	"""
+	Настройка логирования для бота
+	Логи пишутся в файл и выводятся в консоль
+	"""
+	# Создаем папку для логов если её нет
 	os.makedirs('logs', exist_ok=True)
 
+	# Формат логов
 	formatter = logging.Formatter(
 		'%(asctime)s - %(name)s - %(levelname)s - %(message)s',
 		datefmt='%Y-%m-%d %H:%M:%S'
@@ -31,17 +32,21 @@ def setup_logging():
 	console_handler.setFormatter(formatter)
 	console_handler.setLevel(logging.INFO)
 
-	# Корневой логгер
+	# Настраиваем корневой логгер
 	logging.basicConfig(
 		level=logging.INFO,
 		handlers=[file_handler, console_handler]
 	)
 
-	# Уровень логирования для библиотек
+	# Устанавливаем уровень логирования для библиотек
 	logging.getLogger('aiogram').setLevel(logging.WARNING)
 	logging.getLogger('apscheduler').setLevel(logging.WARNING)
 
 	logger = logging.getLogger(__name__)
-	logger.info(f"{E.SUCCESS} Логирование настроено")
+	logger.info("✅ Логирование настроено")
 
 	return logger
+
+
+# Создаем логгер для этого модуля (на всякий случай)
+logger = logging.getLogger(__name__)

@@ -13,8 +13,9 @@ from utils.scheduler import SchedulerManager
 from utils.emoji import Emoji as E
 from utils.setup_logging import setup_logging
 
-load_dotenv()
 logger = setup_logging()
+
+load_dotenv()
 
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')

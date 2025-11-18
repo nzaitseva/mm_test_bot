@@ -1,4 +1,4 @@
-import sqlite3
+import logging
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command, StateFilter
@@ -11,6 +11,7 @@ import json
 from datetime import datetime
 import pytz
 
+logger = logging.getLogger(__name__)
 
 router = Router()
 db = Database()

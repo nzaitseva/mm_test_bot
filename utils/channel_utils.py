@@ -1,5 +1,8 @@
 import re
+import logging
 from utils.emoji import Emoji as E
+
+logger = logging.getLogger(__name__)
 
 def parse_channel_input(channel_input: str) -> str:
 	"""

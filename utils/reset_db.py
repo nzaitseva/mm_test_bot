@@ -1,6 +1,9 @@
-from utils.database import Database
 import os
+import logging
 
+from utils.database import Database
+
+logger = logging.getLogger(__name__)
 
 def reset_database():
 	# Удаляем существующую базу данных

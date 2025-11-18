@@ -1,8 +1,13 @@
+import json
+import logging
+
 from aiogram import Router, F, types
+
 from utils.database import Database
 from keyboards.keyboards import get_test_options_keyboard
-import json
 from utils.emoji import Emoji as E
+
+logger = logging.getLogger(__name__)
 
 router = Router()
 db = Database()
