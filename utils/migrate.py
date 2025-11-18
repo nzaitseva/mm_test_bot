@@ -22,7 +22,7 @@ def migrate_database():
 
 	conn.commit()
 	conn.close()
-	print(f"{E.CONFIRM} Миграция базы данных завершена")
+	logger.info(f"{E.CONFIRM} Миграция базы данных завершена")
 
 
 if __name__ == "__main__":

@@ -18,9 +18,9 @@ db = Database()
 
 @router.message(Command("admin"))
 async def admin_start(message: types.Message):
-    print(f"Пользователь {message.from_user.id} пытается зайти в админку")  # временно
+    logger.info(f"Пользователь {message.from_user.id} пытается зайти в админку")  # временно
     if not db.is_admin(message.from_user.id):
-        print("Не админ")  # временно
+        logger.info("Не админ")  # временно
         await message.answer(f"{E.CANCEL} У вас нет прав администратора")
         return
 

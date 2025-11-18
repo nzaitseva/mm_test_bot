@@ -94,7 +94,7 @@ class Database:
 			conn.close()
 			return True
 		except Exception as e:
-			print(f"Ошибка при сохранении настройки: {e}")
+			logger.info(f"Ошибка при сохранении настройки: {e}")
 			return False
 
 	def get_timezone(self) -> str:
@@ -118,7 +118,7 @@ class Database:
 			cursor.execute('INSERT OR IGNORE INTO admins (user_id) VALUES (?)', (int(user_id),))
 			conn.commit()
 		except Exception as e:
-			print(f"Ошибка при добавлении администратора: {e}")
+			logger.info(f"Ошибка при добавлении администратора: {e}")
 			conn.rollback()
 		finally:
 			conn.close()
@@ -153,7 +153,7 @@ class Database:
 			conn.commit()
 			return True
 		except Exception as e:
-			print(f"Ошибка при удалении теста: {e}")
+			logger.info(f"Ошибка при удалении теста: {e}")
 			conn.rollback()
 			return False
 		finally:
@@ -219,7 +219,7 @@ class Database:
 			conn.commit()
 			return True
 		except Exception as e:
-			print(f"Ошибка при удалении расписания: {e}")
+			logger.info(f"Ошибка при удалении расписания: {e}")
 			conn.rollback()
 			return False
 		finally:

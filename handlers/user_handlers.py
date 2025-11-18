@@ -49,7 +49,7 @@ async def send_test_to_channel(test_id, channel_id, bot):
 			)
 		return True
 	except Exception as e:
-		print(f"Ошибка отправки теста: {e}")
+		logger.info(f"Ошибка отправки теста: {e}")
 		return False
 
 

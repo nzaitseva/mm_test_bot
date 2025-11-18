@@ -96,11 +96,11 @@ def test_parse_channel_input():
 		("invalid@username", "invalid@username"),
 	]
 
-	print("🔍 Тестирование парсера каналов:")
+	logger.info("🔍 Тестирование парсера каналов:")
 	for input_text, expected in test_cases:
 		result = parse_channel_input(input_text)
 		status = f"{E.SUCCESS}" if result == expected else f"{E.ERROR}"
-		print(f"{status} '{input_text}' -> '{result}' (expected: '{expected}')")
+		logger.info(f"{status} '{input_text}' -> '{result}' (expected: '{expected}')")
 
 
 if __name__ == "__main__":

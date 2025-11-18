@@ -50,12 +50,12 @@ class SchedulerManager:
 							(schedule_id,)
 						)
 						conn.commit()
-						print(f"{E.CONFIRM} Тест '{test_title}' отправлен в {channel_id}")
+						logger.info(f"{E.CONFIRM} Тест '{test_title}' отправлен в {channel_id}")
 					else:
-						print(f"{E.ERROR} Ошибка отправки теста '{test_title}' в {channel_id}")
+						logger.info(f"{E.ERROR} Ошибка отправки теста '{test_title}' в {channel_id}")
 
 				except Exception as e:
-					print(f"{E.ERROR} Ошибка отправки теста: {e}")
+					logger.info(f"{E.ERROR} Ошибка отправки теста: {e}")
 
 		conn.close()
 

@@ -11,11 +11,11 @@ from handlers.settings_handlers import router as settings_router  # Добавл
 from utils.database import Database
 from utils.scheduler import SchedulerManager
 from utils.emoji import Emoji as E
+from utils.setup_logging import setup_logging
 
 load_dotenv()
+logger = setup_logging()
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 ADMIN_IDS = [int(x.strip()) for x in os.getenv('ADMIN_IDS', '').split(',') if x.strip()]
