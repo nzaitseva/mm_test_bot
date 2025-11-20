@@ -1,0 +1,12 @@
+.git
+.gitignore
+README.md
+*.pyc
+__pycache__
+.env
+*.log
+data/
+logs/
+Dockerfile
+docker-compose.yml
+export_data.py

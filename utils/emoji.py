@@ -43,3 +43,5 @@ class Emoji:
 	PUZZLE = "🧩"
 	TEST = "📊"
 	DARTS = "🎯"
+	ROCKET = "🚀"
+	STOPPED = "🛑"
