@@ -34,7 +34,7 @@ async def main():
 		dp = Dispatcher(storage=storage)
 
 		# Инициализация базы данных с путем для Docker
-		db = Database("tests.db")
+		db = Database()
 
 		# Добавление администраторов
 		for admin_id in ADMIN_IDS:
