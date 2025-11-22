@@ -67,8 +67,8 @@ async def handle_test_answer(callback: types.CallbackQuery):
 	try:
 		# Формат: test_ТЕСТ_ID_option_ВАРИАНТ_ТЕКСТ
 		parts = callback.data.split('_', 3)  # test, ID, option, ТЕКСТ
-		#logger.info(f"📨 Получен callback_data: {callback.data}")
-		#logger.info(f"🔍 Разделенные части: {parts}")
+		logger.info(f"📨 Получен callback_data: {callback.data}")
+		logger.info(f"🔍 Разделенные части: {parts}")
 
 		if len(parts) != 4 or parts[0] != "test" or parts[2] != "option":
 			logger.error(f"{E.ERROR} Неверный формат: {callback.data}")
@@ -78,7 +78,7 @@ async def handle_test_answer(callback: types.CallbackQuery):
 		test_id = int(parts[1])
 		option_text = parts[3]
 
-		#logger.info(f"🔍 Поиск: test_id={test_id}, option_text='{option_text}'")
+		logger.info(f"🔍 Поиск: test_id={test_id}, option_text='{option_text}'")
 
 		# Ищем ТОЛЬКО в указанном тесте
 		test = db.get_test(test_id)
@@ -88,11 +88,11 @@ async def handle_test_answer(callback: types.CallbackQuery):
 			return
 
 		options = json.loads(test[6])
-		#logger.info(f"🔍 Варианты в тесте {test_id}: {list(options.keys())}")
+		logger.info(f"🔍 Варианты в тесте {test_id}: {list(options.keys())}")
 
 		if option_text in options:
 			result_text = options[option_text]
-			#logger.info(f"✅ Найден результат: '{result_text}'")
+			logger.info(f"✅ Найден результат: '{result_text}'")
 
 			if result_text and result_text.strip():
 				alert_text = result_text[:200]
