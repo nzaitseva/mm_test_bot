@@ -78,12 +78,22 @@ def get_schedules_list_keyboard(schedules):
 
 	return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-def get_test_options_keyboard(options):
+
+def get_test_options_keyboard(options, test_id):
 	buttons = []
 	for option_text in options.keys():
 		button_text = option_text[:30] + "..." if len(option_text) > 30 else option_text
-		buttons.append([InlineKeyboardButton(text=button_text, callback_data=f"answer_{option_text}")])
+		callback_data = f"answer_{test_id}_{option_text}"
 
+		# Добавим логирование для отладки
+		import logging
+		logger = logging.getLogger(__name__)
+		logger.info(f"🛠️ Создаем кнопку: '{button_text}' -> callback_data: '{callback_data}'")
+
+		buttons.append([InlineKeyboardButton(
+			text=button_text,
+			callback_data=callback_data
+		)])
 	return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 def get_cancel_keyboard():
