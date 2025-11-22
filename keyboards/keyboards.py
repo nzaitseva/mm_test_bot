@@ -3,21 +3,24 @@ from utils.emoji import Emoji as E
 
 
 def get_admin_main_menu():
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text=f"{E.CREATE} Создать тест"), KeyboardButton(text=f"{E.SCHEDULE} Запланировать отправку")],
-            [KeyboardButton(text=f"{E.LIST} Мои тесты"), KeyboardButton(text=f"{E.DELETE} Удалить тест")],
-            [KeyboardButton(text=f"{E.SCHEDULES} Активные расписания"), KeyboardButton(text=f"{E.SETTINGS} Настройки")]
-        ],
-        resize_keyboard=True
-    )
+	return ReplyKeyboardMarkup(
+		keyboard=[
+			[KeyboardButton(text=f"{E.CREATE} Создать тест"),
+			 KeyboardButton(text=f"{E.SCHEDULE} Запланировать отправку")],
+			[KeyboardButton(text=f"{E.LIST} Мои тесты"), KeyboardButton(text=f"{E.DELETE} Удалить тест")],
+			[KeyboardButton(text=f"{E.SCHEDULES} Активные расписания"), KeyboardButton(text=f"{E.SETTINGS} Настройки")]
+		],
+		resize_keyboard=True
+	)
+
 
 def get_settings_keyboard():
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=f"{E.CLOCK} Часовой пояс", callback_data="settings_timezone")],
+	return InlineKeyboardMarkup(
+		inline_keyboard=[
+			[InlineKeyboardButton(text=f"{E.CLOCK} Часовой пояс", callback_data="settings_timezone")],
 		]
-    )
+	)
+
 
 def get_timezone_keyboard():
 	timezones = [
@@ -40,14 +43,16 @@ def get_timezone_keyboard():
 
 	return InlineKeyboardMarkup(inline_keyboard=buttons)
 
+
 def get_content_type_keyboard():
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=f"{E.TEXT} Только текст", callback_data="content_text")],
-            [InlineKeyboardButton(text=f"{E.PHOTO} Только картинка", callback_data="content_photo")],
-            [InlineKeyboardButton(text=f"{E.BOTH} Текст и картинка", callback_data="content_both")]
-        ]
-    )
+	return InlineKeyboardMarkup(
+		inline_keyboard=[
+			[InlineKeyboardButton(text=f"{E.TEXT} Только текст", callback_data="content_text")],
+			[InlineKeyboardButton(text=f"{E.PHOTO} Только картинка", callback_data="content_photo")],
+			[InlineKeyboardButton(text=f"{E.BOTH} Текст и картинка", callback_data="content_both")]
+		]
+	)
+
 
 def get_tests_list_keyboard(tests, action="select"):
 	buttons = []
@@ -58,6 +63,7 @@ def get_tests_list_keyboard(tests, action="select"):
 			buttons.append([InlineKeyboardButton(text=f"{E.LIST} {title}", callback_data=f"select_test_{test_id}")])
 
 	return InlineKeyboardMarkup(inline_keyboard=buttons)
+
 
 def get_schedules_list_keyboard(schedules):
 	buttons = []
@@ -80,40 +86,41 @@ def get_schedules_list_keyboard(schedules):
 
 
 def get_test_options_keyboard(options, test_id):
+	"""Создает клавиатуру с вариантами ответов для теста"""
 	buttons = []
 	for option_text in options.keys():
 		button_text = option_text[:30] + "..." if len(option_text) > 30 else option_text
-		callback_data = f"answer_{test_id}_{option_text}"
-
-		# Добавим логирование для отладки
-		import logging
-		logger = logging.getLogger(__name__)
-		logger.info(f"🛠️ Создаем кнопку: '{button_text}' -> callback_data: '{callback_data}'")
+		# Новый формат: test_ТЕСТ_ID_option_ВАРИАНТ
+		callback_data = f"test_{test_id}_option_{option_text}"
 
 		buttons.append([InlineKeyboardButton(
 			text=button_text,
 			callback_data=callback_data
 		)])
+
 	return InlineKeyboardMarkup(inline_keyboard=buttons)
 
+
 def get_cancel_keyboard():
-    return ReplyKeyboardMarkup(
-        keyboard=[[KeyboardButton(text=f"{E.CANCEL} Отмена")]],
-        resize_keyboard=True
-    )
+	return ReplyKeyboardMarkup(
+		keyboard=[[KeyboardButton(text=f"{E.CANCEL} Отмена")]],
+		resize_keyboard=True
+	)
+
 
 def get_confirmation_keyboard(action="delete"):
-    if action == "delete_schedule":
-        return InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text=f"{E.CONFIRM} Да, удалить расписание", callback_data="confirm_delete_schedule")],
-                [InlineKeyboardButton(text=f"{E.CANCEL} Нет, отмена", callback_data="cancel_delete")]
-            ]
-        )
-    else:
-        return InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(text=f"{E.CONFIRM} Да, удалить", callback_data="confirm_delete")],
-                [InlineKeyboardButton(text=f"{E.CANCEL} Нет, отмена", callback_data="cancel_delete")]
-            ]
-        )
+	if action == "delete_schedule":
+		return InlineKeyboardMarkup(
+			inline_keyboard=[
+				[InlineKeyboardButton(text=f"{E.CONFIRM} Да, удалить расписание",
+									  callback_data="confirm_delete_schedule")],
+				[InlineKeyboardButton(text=f"{E.CANCEL} Нет, отмена", callback_data="cancel_delete")]
+			]
+		)
+	else:
+		return InlineKeyboardMarkup(
+			inline_keyboard=[
+				[InlineKeyboardButton(text=f"{E.CONFIRM} Да, удалить", callback_data="confirm_delete")],
+				[InlineKeyboardButton(text=f"{E.CANCEL} Нет, отмена", callback_data="cancel_delete")]
+			]
+		)

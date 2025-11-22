@@ -6,7 +6,7 @@ from utils.database import Database
 from keyboards.keyboards import *
 from states import TestCreation, ScheduleCreation, TestDeletion, ScheduleDeletion
 from utils.emoji import Emoji as E
-from utils.channel_utils import parse_channel_input  # Добавляем импорт
+from utils.channel_utils import parse_channel_input
 import json
 from datetime import datetime
 import pytz
@@ -19,17 +19,18 @@ db = Database()
 
 @router.message(Command("admin"))
 async def admin_start(message: types.Message):
-    logger.info(f"Пользователь {message.from_user.id} пытается зайти в админку")  # временно
-    if not db.is_admin(message.from_user.id):
-        logger.info("Не админ")  # временно
-        await message.answer(f"{E.CANCEL} У вас нет прав администратора")
-        return
+	logger.info(f"Пользователь {message.from_user.id} пытается зайти в админку")
+	if not db.is_admin(message.from_user.id):
+		logger.info("Не админ")
+		await message.answer(f"{E.CANCEL} У вас нет прав администратора")
+		return
 
-    await message.answer(
-        f"{E.HAND} Добро пожаловать в панель администратора!\n"
-        "Здесь вы можете создавать тесты и планировать их отправку в каналы.",
-        reply_markup=get_admin_main_menu()
-    )
+	await message.answer(
+		f"{E.HAND} Добро пожаловать в панель администратора!\n"
+		"Здесь вы можете создавать тесты и планировать их отправку в каналы.",
+		reply_markup=get_admin_main_menu()
+	)
+
 
 # Список тестов
 @router.message(F.text == f"{E.LIST} Мои тесты")
@@ -62,6 +63,7 @@ async def start_test_creation(message: types.Message, state: FSMContext):
 		reply_markup=get_cancel_keyboard()
 	)
 
+
 # Название
 @router.message(TestCreation.waiting_for_title)
 async def process_title(message: types.Message, state: FSMContext):
@@ -73,6 +75,7 @@ async def process_title(message: types.Message, state: FSMContext):
 	await state.update_data(title=message.text)
 	await state.set_state(TestCreation.waiting_for_content_type)
 	await message.answer("Выберите тип контента:", reply_markup=get_content_type_keyboard())
+
 
 # Тип сообщения (текст, фото, текст + фото)
 @router.callback_query(TestCreation.waiting_for_content_type, F.data.startswith("content_"))
@@ -88,6 +91,7 @@ async def process_content_type(callback: types.CallbackQuery, state: FSMContext)
 		await callback.message.answer("Отправьте картинку для теста:", reply_markup=get_cancel_keyboard())
 
 	await callback.answer()
+
 
 # Текст
 @router.message(TestCreation.waiting_for_text_content)
@@ -107,6 +111,7 @@ async def process_text_content(message: types.Message, state: FSMContext):
 		await state.set_state(TestCreation.waiting_for_photo)
 		await message.answer("Теперь отправьте картинку:", reply_markup=get_cancel_keyboard())
 
+
 # Добавление фото
 @router.message(TestCreation.waiting_for_photo, F.photo)
 async def process_photo(message: types.Message, state: FSMContext):
@@ -122,6 +127,7 @@ async def process_photo(message: types.Message, state: FSMContext):
 	if data['content_type'] == 'photo' or 'text_content' in data:
 		await state.set_state(TestCreation.waiting_for_question)
 		await message.answer("Введите вопрос теста:", reply_markup=get_cancel_keyboard())
+
 
 # Вопрос
 @router.message(TestCreation.waiting_for_question)
@@ -144,7 +150,8 @@ async def process_question(message: types.Message, state: FSMContext):
 		reply_markup=get_cancel_keyboard()
 	)
 
-# Вариантоы ответов
+
+# Варианты ответов с валидацией
 @router.message(TestCreation.waiting_for_options)
 async def process_options(message: types.Message, state: FSMContext):
 	if message.text == f"{E.CANCEL} Отмена":
@@ -155,7 +162,8 @@ async def process_options(message: types.Message, state: FSMContext):
 	try:
 		options = {}
 		lines = message.text.split('\n')
-		# парсим варианты ответа вида "Вариант1 :: Результат 1"
+
+		# Парсим варианты ответа вида "Вариант1 :: Результат 1"
 		for line in lines:
 			if '::' in line:
 				option, result = line.split('::', 1)
@@ -170,6 +178,21 @@ async def process_options(message: types.Message, state: FSMContext):
 					return
 
 				options[option_text] = result_text
+
+		# ВАЛИДАЦИЯ: Проверяем на пустые результаты
+		empty_results = []
+		for option_text, result_text in options.items():
+			if not result_text.strip():
+				empty_results.append(option_text)
+
+		if empty_results:
+			await message.answer(
+				f"{E.ERROR} Для следующих вариантов не заполнен результат:\n"
+				f"{', '.join(empty_results)}\n\n"
+				f"Пожалуйста, введите варианты заново в формате:\n"
+				f"Вариант :: Результат"
+			)
+			return
 
 		if len(options) < 2:
 			await message.answer(f"{E.ERROR} Нужно как минимум 2 варианта ответа. Попробуйте еще раз:")
@@ -215,6 +238,7 @@ async def start_scheduling(message: types.Message, state: FSMContext):
 		reply_markup=get_tests_list_keyboard(tests)
 	)
 
+
 # Выбор теста
 @router.callback_query(ScheduleCreation.waiting_for_test_selection, F.data.startswith("select_test_"))
 async def process_test_selection(callback: types.CallbackQuery, state: FSMContext):
@@ -226,6 +250,7 @@ async def process_test_selection(callback: types.CallbackQuery, state: FSMContex
 		reply_markup=get_cancel_keyboard()
 	)
 	await callback.answer()
+
 
 # Выбор канала (@channel_name или https://t.me/channel_name)
 @router.message(ScheduleCreation.waiting_for_channel)
@@ -246,6 +271,7 @@ async def process_channel(message: types.Message, state: FSMContext):
 		parse_mode="HTML",
 		reply_markup=get_cancel_keyboard()
 	)
+
 
 # Время отправки теста
 @router.message(ScheduleCreation.waiting_for_time)
@@ -321,6 +347,7 @@ async def show_active_schedules(message: types.Message):
 		reply_markup=get_schedules_list_keyboard(schedules)
 	)
 
+
 @router.callback_query(F.data.startswith("delete_schedule_"))
 async def process_schedule_selection_for_deletion(callback: types.CallbackQuery, state: FSMContext):
 	schedule_id = int(callback.data.replace("delete_schedule_", ""))
@@ -360,6 +387,7 @@ async def process_schedule_selection_for_deletion(callback: types.CallbackQuery,
 
 	await callback.answer()
 
+
 @router.callback_query(ScheduleDeletion.waiting_for_confirmation, F.data == "confirm_delete_schedule")
 async def confirm_schedule_deletion(callback: types.CallbackQuery, state: FSMContext):
 	data = await state.get_data()
@@ -380,6 +408,7 @@ async def confirm_schedule_deletion(callback: types.CallbackQuery, state: FSMCon
 
 	await state.clear()
 	await callback.answer()
+
 
 @router.callback_query(ScheduleDeletion.waiting_for_confirmation, F.data == "cancel_delete")
 async def cancel_schedule_deletion(callback: types.CallbackQuery, state: FSMContext):
@@ -422,6 +451,7 @@ async def process_test_selection_for_deletion(callback: types.CallbackQuery, sta
 
 	await callback.answer()
 
+
 @router.message(F.text == f"{E.DELETE} Удалить тест")
 async def start_test_deletion(message: types.Message, state: FSMContext):
 	if not db.is_admin(message.from_user.id):
@@ -437,6 +467,7 @@ async def start_test_deletion(message: types.Message, state: FSMContext):
 		"Выберите тест для удаления:",
 		reply_markup=get_tests_list_keyboard(tests, action="delete")
 	)
+
 
 @router.callback_query(TestDeletion.waiting_for_confirmation, F.data == "confirm_delete")
 async def confirm_test_deletion(callback: types.CallbackQuery, state: FSMContext):
@@ -461,11 +492,12 @@ async def confirm_test_deletion(callback: types.CallbackQuery, state: FSMContext
 	await state.clear()
 	await callback.answer()
 
+
 @router.callback_query(TestDeletion.waiting_for_confirmation, F.data == "cancel_delete")
 async def cancel_test_deletion(callback: types.CallbackQuery, state: FSMContext):
-    await state.clear()
-    await callback.message.edit_text(f"{E.CANCEL} Удаление отменено")
-    await callback.answer()
+	await state.clear()
+	await callback.message.edit_text(f"{E.CANCEL} Удаление отменено")
+	await callback.answer()
 
 
 # Обработчик для тестирования
@@ -490,3 +522,67 @@ async def test_channel_parser(message: types.Message):
 		parsed = parse_channel_input(test_case)
 		result_text += f"<code>{test_case}</code> → <code>{parsed}</code>\n"
 	await message.answer(result_text, parse_mode="HTML")
+
+
+# Команда для проверки тестов с пустыми результатами
+@router.message(Command("check_empty_results"))
+async def check_empty_results(message: types.Message):
+	"""Проверка тестов с пустыми результатами"""
+	if not db.is_admin(message.from_user.id):
+		return
+
+	tests = db.get_all_tests()
+	problematic_tests = []
+
+	for test_id, title in tests:
+		test = db.get_test(test_id)
+		if test:
+			options = json.loads(test[6])
+			empty_options = [opt for opt, res in options.items() if not res.strip()]
+			if empty_options:
+				problematic_tests.append((test_id, title, empty_options))
+
+	if problematic_tests:
+		text = f"{E.WARNING} Тесты с пустыми результатами:\n\n"
+		for test_id, title, empty_opts in problematic_tests:
+			text += f"📝 {title} (ID: {test_id})\n"
+			text += f"Пустые варианты: {', '.join(empty_opts)}\n\n"
+
+		text += "Используйте команду /fix_test [ID] чтобы исправить"
+		await message.answer(text)
+	else:
+		await message.answer(f"{E.SUCCESS} Все тесты имеют заполненные результаты!")
+
+
+# Команда для исправления конкретного теста
+@router.message(Command("fix_test"))
+async def fix_test_command(message: types.Message):
+	"""Исправление теста с пустыми результатами"""
+	if not db.is_admin(message.from_user.id):
+		return
+
+	try:
+		# Получаем ID теста из команды: /fix_test 2
+		test_id = int(message.text.split()[1])
+
+		test = db.get_test(test_id)
+		if not test:
+			await message.answer(f"{E.ERROR} Тест с ID {test_id} не найден")
+			return
+
+		options = json.loads(test[6])
+		empty_options = [opt for opt, res in options.items() if not res.strip()]
+
+		if not empty_options:
+			await message.answer(f"{E.SUCCESS} Тест {test_id} не имеет пустых результатов!")
+			return
+
+		text = f"{E.WARNING} Тест '{test[1]}' (ID: {test_id}) имеет пустые результаты:\n\n"
+		for option in empty_options:
+			text += f"• {option}\n"
+
+		text += f"\nЧтобы исправить, пересоздайте тест через меню или используйте миграцию."
+		await message.answer(text)
+
+	except (IndexError, ValueError):
+		await message.answer(f"{E.ERROR} Используйте: /fix_test [ID_теста]\nПример: /fix_test 2")
