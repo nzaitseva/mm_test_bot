@@ -128,17 +128,18 @@ class Database:
 			conn.close()
 
 	def add_test(self, title: str, content_type: str, text_content: Optional[str],
-				 photo_file_id: Optional[str], question_text: str, options: dict) -> int:
+				 photo_file_id: Optional[str], photo_path: Optional[str], question_text: str, options: dict) -> int:
 		conn = sqlite3.connect(self.db_path)
 		cursor = conn.cursor()
 		cursor.execute('''
-            INSERT INTO tests (title, content_type, text_content, photo_file_id, question_text, options)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (
+			INSERT INTO tests (title, content_type, text_content, photo_file_id, photo_path, question_text, options)
+			VALUES (?, ?, ?, ?, ?, ?, ?)
+		''', (
 			str(title),
 			str(content_type),
 			str(text_content) if text_content else None,
 			str(photo_file_id) if photo_file_id else None,
+			str(photo_path) if photo_path else None,
 			str(question_text),
 			json.dumps(options, ensure_ascii=False)
 		))
@@ -166,7 +167,11 @@ class Database:
 	def get_test(self, test_id):
 		conn = sqlite3.connect(self.db_path)
 		cursor = conn.cursor()
-		cursor.execute('SELECT * FROM tests WHERE id = ?', (int(test_id),))
+		# Явно выбираем поля в порядке: id, title, content_type, text_content, photo_file_id, photo_path, question_text, options, created_at, is_active
+		cursor.execute('''
+			SELECT id, title, content_type, text_content, photo_file_id, photo_path, question_text, options, created_at, is_active
+			FROM tests WHERE id = ?
+		''', (int(test_id),))
 		test = cursor.fetchone()
 		conn.close()
 		return test

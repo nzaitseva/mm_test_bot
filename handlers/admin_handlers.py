@@ -7,6 +7,7 @@ from keyboards.keyboards import *
 from states import TestCreation, ScheduleCreation, TestDeletion, ScheduleDeletion
 from utils.emoji import Emoji as E
 from utils.channel_utils import parse_channel_input
+from utils.photo_manager import save_photo_from_message
 import json
 from datetime import datetime
 import pytz
@@ -121,7 +122,15 @@ async def process_photo(message: types.Message, state: FSMContext):
 		return
 
 	photo_file_id = message.photo[-1].file_id
-	await state.update_data(photo_file_id=photo_file_id)
+
+	# Сохраняем фото локально и записываем путь в state; если не удалось — оставляем пустой путь
+	try:
+		photo_path = await save_photo_from_message(message)
+	except Exception as e:
+		logger.error(f"{E.ERROR} Ошибка сохранения фото: {e}")
+		photo_path = ''
+
+	await state.update_data(photo_file_id=photo_file_id, photo_path=photo_path)
 
 	data = await state.get_data()
 	if data['content_type'] == 'photo' or 'text_content' in data:
@@ -204,6 +213,7 @@ async def process_options(message: types.Message, state: FSMContext):
 			content_type=data['content_type'],
 			text_content=data.get('text_content', ''),
 			photo_file_id=data.get('photo_file_id', ''),
+			photo_path=data.get('photo_path', ''),
 			question_text=data['question'],
 			options=options
 		)
@@ -537,7 +547,7 @@ async def check_empty_results(message: types.Message):
 	for test_id, title in tests:
 		test = db.get_test(test_id)
 		if test:
-			options = json.loads(test[6])
+			options = json.loads(test[7])
 			empty_options = [opt for opt, res in options.items() if not res.strip()]
 			if empty_options:
 				problematic_tests.append((test_id, title, empty_options))
@@ -570,7 +580,7 @@ async def fix_test_command(message: types.Message):
 			await message.answer(f"{E.ERROR} Тест с ID {test_id} не найден")
 			return
 
-		options = json.loads(test[6])
+		options = json.loads(test[7])
 		empty_options = [opt for opt, res in options.items() if not res.strip()]
 
 		if not empty_options:

@@ -5,6 +5,8 @@ from aiogram import Router, F, types
 from aiogram.filters import Command
 
 from utils.database import Database
+import os
+from aiogram.types import FSInputFile
 from keyboards.keyboards import get_test_options_keyboard
 from utils.emoji import Emoji as E
 
@@ -21,14 +23,16 @@ async def send_test_to_channel(test_id, channel_id, bot):
 		logger.error(f"{E.ERROR} Тест {test_id} не найден для отправки в канал {channel_id}")
 		return False
 
+	# test tuple order defined in Database.get_test()
 	test_data = {
 		'id': test[0],
 		'title': test[1],
 		'content_type': test[2],
 		'text_content': test[3],
 		'photo_file_id': test[4],
-		'question_text': test[5],
-		'options': json.loads(test[6])
+		'photo_path': test[5],
+		'question_text': test[6],
+		'options': json.loads(test[7])
 	}
 
 	# Передаем test_id в клавиатуру для нового формата callback_data
@@ -42,19 +46,48 @@ async def send_test_to_channel(test_id, channel_id, bot):
 				reply_markup=keyboard
 			)
 		elif test_data['content_type'] == 'photo':
-			await bot.send_photo(
-				chat_id=channel_id,
-				photo=test_data['photo_file_id'],
-				caption=f"{E.PUZZLE} {test_data['title']}\n\n{test_data['question_text']}",
-				reply_markup=keyboard
-			)
+			# сначала пробуем локальный файл, затем fallback на file_id
+			if test_data.get('photo_path') and os.path.exists(test_data['photo_path']):
+				await bot.send_photo(
+					chat_id=channel_id,
+					photo=FSInputFile(test_data['photo_path']),
+					caption=f"{E.PUZZLE} {test_data['title']}\n\n{test_data['question_text']}",
+					reply_markup=keyboard
+				)
+			elif test_data.get('photo_file_id'):
+				await bot.send_photo(
+					chat_id=channel_id,
+					photo=test_data['photo_file_id'],
+					caption=f"{E.PUZZLE} {test_data['title']}\n\n{test_data['question_text']}",
+					reply_markup=keyboard
+				)
+			else:
+				await bot.send_message(
+					chat_id=channel_id,
+					text=f"{E.PUZZLE} {test_data['title']}\n\n{test_data['question_text']}",
+					reply_markup=keyboard
+				)
 		elif test_data['content_type'] == 'both':
-			await bot.send_photo(
-				chat_id=channel_id,
-				photo=test_data['photo_file_id'],
-				caption=f"{E.PUZZLE} {test_data['title']}\n\n{test_data['text_content']}\n\n{test_data['question_text']}",
-				reply_markup=keyboard
-			)
+			if test_data.get('photo_path') and os.path.exists(test_data['photo_path']):
+				await bot.send_photo(
+					chat_id=channel_id,
+					photo=FSInputFile(test_data['photo_path']),
+					caption=f"{E.PUZZLE} {test_data['title']}\n\n{test_data['text_content']}\n\n{test_data['question_text']}",
+					reply_markup=keyboard
+				)
+			elif test_data.get('photo_file_id'):
+				await bot.send_photo(
+					chat_id=channel_id,
+					photo=test_data['photo_file_id'],
+					caption=f"{E.PUZZLE} {test_data['title']}\n\n{test_data['text_content']}\n\n{test_data['question_text']}",
+					reply_markup=keyboard
+				)
+			else:
+				await bot.send_message(
+					chat_id=channel_id,
+					text=f"{E.PUZZLE} {test_data['title']}\n\n{test_data['text_content']}\n\n{test_data['question_text']}",
+					reply_markup=keyboard
+				)
 		return True
 	except Exception as e:
 		logger.error(f"{E.ERROR} Ошибка отправки теста {test_id} в {channel_id}: {e}")
@@ -87,7 +120,7 @@ async def handle_test_answer(callback: types.CallbackQuery):
 			await callback.answer(f"{E.ERROR} Тест не найден", show_alert=True)
 			return
 
-		options = json.loads(test[6])
+		options = json.loads(test[7])
 		logger.info(f"🔍 Варианты в тесте {test_id}: {list(options.keys())}")
 
 		if option_text in options:
