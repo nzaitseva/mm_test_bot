@@ -114,28 +114,48 @@ async def process_text_content(message: types.Message, state: FSMContext):
 
 
 # Добавление фото
-@router.message(TestCreation.waiting_for_photo, F.photo)
+
+@router.message(TestCreation.waiting_for_photo)
 async def process_photo(message: types.Message, state: FSMContext):
-	if message.text == f"{E.CANCEL} Отмена":
-		await state.clear()
-		await message.answer(f"{E.CANCEL} Создание теста отменено", reply_markup=get_admin_main_menu())
-		return
+    """
+    Универсальный обработчик: поддерживает и photo, и document (image/*).
+    """
+    # Проверка на отмену (клавиатура)
+    if message.text == f"{E.CANCEL} Отмена":
+        await state.clear()
+        await message.answer(f"{E.CANCEL} Создание теста отменено", reply_markup=get_admin_main_menu())
+        return
 
-	photo_file_id = message.photo[-1].file_id
+    # Определяем file_id для хранения в БД (photo или document)
+    photo_file_id = None
+    try:
+        if getattr(message, 'photo', None):
+            photo_file_id = message.photo[-1].file_id
+        elif getattr(message, 'document', None) and getattr(message.document, 'mime_type', '').startswith('image'):
+            photo_file_id = message.document.file_id
+        else:
+            # Не изображение — игнорируем или просим прислать корректный файл
+            await message.answer(f"{E.ERROR} Пожалуйста, отправьте изображение (как фото или файл изображения).", reply_markup=get_cancel_keyboard())
+            return
 
-	# Сохраняем фото локально и записываем путь в state; если не удалось — оставляем пустой путь
-	try:
-		photo_path = await save_photo_from_message(message)
-	except Exception as e:
-		logger.error(f"{E.ERROR} Ошибка сохранения фото: {e}")
-		photo_path = ''
+        # Сохраняем фото локально и записываем путь в state; если не удалось — оставляем пустой путь
+        try:
+            photo_path = await save_photo_from_message(message)
+        except Exception as e:
+            logger.error(f"{E.ERROR} Ошибка сохранения фото: {e}")
+            photo_path = ''
 
-	await state.update_data(photo_file_id=photo_file_id, photo_path=photo_path)
+        await state.update_data(photo_file_id=photo_file_id, photo_path=photo_path)
 
-	data = await state.get_data()
-	if data['content_type'] == 'photo' or 'text_content' in data:
-		await state.set_state(TestCreation.waiting_for_question)
-		await message.answer("Введите вопрос теста:", reply_markup=get_cancel_keyboard())
+        data = await state.get_data()
+        # Переходим к следующему шагу если необходимо
+        if data['content_type'] == 'photo' or 'text_content' in data:
+            await state.set_state(TestCreation.waiting_for_question)
+            await message.answer("Введите вопрос теста:", reply_markup=get_cancel_keyboard())
+
+    except Exception as e:
+        logger.exception(e)
+        await message.answer(f"{E.ERROR} Произошла ошибка при обработке изображения: {e}")
 
 
 # Вопрос

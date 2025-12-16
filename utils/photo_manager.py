@@ -10,19 +10,23 @@ def ensure_photos_dir():
     PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
 
 async def save_photo_from_message(message) -> str:
-    """Сохранить самое большое фото из message.photo в папку photos и вернуть путь.
-
-    Использует Telegram File API через bot.get_file + скачивание по URL.
-    Возвращает абсолютный путь как строку.
+    """
+    Сохранить фото (поддерживает и message.photo и message.document с image/* mime-type)
+    и вернуть локальный путь к файлу.
     """
     ensure_photos_dir()
 
-    if not getattr(message, 'photo', None):
-        raise ValueError('No photo in message')
-
-    # Берём самый большой вариант фото
-    photo = message.photo[-1]
-    file_id = photo.file_id
+    # Если это обычное photo (варианты размеров)
+    if getattr(message, 'photo', None):
+        file_id = message.photo[-1].file_id
+        original_filename = f"photo_{file_id}.jpg"
+    # Если это document (например, когда "compress image" выключен)
+    elif getattr(message, 'document', None) and getattr(message.document, 'mime_type', '').startswith('image'):
+        file_id = message.document.file_id
+        # Попробуем взять оригинальное имя, если есть
+        original_filename = getattr(message.document, 'file_name', f"doc_{file_id}.jpg")
+    else:
+        raise ValueError('No photo or image document in message')
 
     # Получаем информацию о файле у Telegram
     file = await message.bot.get_file(file_id)
@@ -38,7 +42,9 @@ async def save_photo_from_message(message) -> str:
     # Уникальное имя
     ts = datetime.utcnow().strftime('%Y%m%d%H%M%S')
     unique = uuid.uuid4().hex[:8]
-    filename = f"test_{ts}_{unique}.jpg"
+    # Сохраняем с расширением из оригинального имени, если возможно
+    ext = os.path.splitext(original_filename)[1] or '.jpg'
+    filename = f"test_{ts}_{unique}{ext}"
     dest = PHOTOS_DIR / filename
 
     # Скачиваем через aiohttp
