@@ -124,3 +124,49 @@ def get_confirmation_keyboard(action="delete"):
 				[InlineKeyboardButton(text=f"{E.CANCEL} Нет, отмена", callback_data="cancel_delete")]
 			]
 		)
+
+
+# ----- New helper keyboards for viewing/editing tests -----
+
+def get_tests_view_keyboard(tests):
+	"""
+	Кнопки для просмотра теста: view_test_{id}
+	tests: list of (id, title)
+	"""
+	buttons = []
+	for test_id, title in tests:
+		buttons.append([InlineKeyboardButton(text=f"🔎 {title}", callback_data=f"view_test_{test_id}")])
+	return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_test_detail_keyboard(test_id):
+	"""
+	Кнопки для детального просмотра теста:
+	- Одна кнопка "Редактировать" для перехода в режим редактирования (edit session)
+	- Кнопка "Назад" для возврата к списку тестов
+	(Убраны отдельные кнопки редактирования полей — редактирование через сессию)
+	"""
+	buttons = [
+		[InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"start_edit_session_{test_id}")],
+		[InlineKeyboardButton(text=f"{E.BACK} Назад", callback_data=f"detail_back_{test_id}")]
+	]
+	return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_edit_session_keyboard(test_id):
+	"""
+	Кнопки режима редактирования.
+	Обратите внимание: кнопки "Готово" и "Отмена" имеют префиксы
+	'session_done_' и 'session_cancel_' чтобы не конфликовать с
+	session_edit_* обработчиком.
+	"""
+	buttons = [
+		[InlineKeyboardButton(text="✏️ Название", callback_data=f"session_edit_{test_id}_title"),
+		 InlineKeyboardButton(text="✏️ Текст", callback_data=f"session_edit_{test_id}_text")],
+		[InlineKeyboardButton(text="🖼️ Картинка", callback_data=f"session_edit_{test_id}_photo"),
+		 InlineKeyboardButton(text="❓ Вопрос", callback_data=f"session_edit_{test_id}_question")],
+		[InlineKeyboardButton(text="📝 Варианты", callback_data=f"session_edit_{test_id}_options")],
+		[InlineKeyboardButton(text="✅ Готово", callback_data=f"session_done_{test_id}"),
+		 InlineKeyboardButton(text="⬅️ Отмена", callback_data=f"session_cancel_{test_id}")]
+	]
+	return InlineKeyboardMarkup(inline_keyboard=buttons)

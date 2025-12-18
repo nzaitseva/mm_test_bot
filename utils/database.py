@@ -33,7 +33,7 @@ class Database:
 	        )
 	    ''')
 
-		# Таблица тестов
+		# Таблица тестов (включая локальный путь photo_path)
 		cursor.execute('''
 	        CREATE TABLE IF NOT EXISTS tests (
 	            id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -41,6 +41,7 @@ class Database:
 	            content_type TEXT NOT NULL,
 	            text_content TEXT,
 	            photo_file_id TEXT,
+	            photo_path TEXT,
 	            question_text TEXT NOT NULL,
 	            options TEXT NOT NULL,
 	            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -234,3 +235,42 @@ class Database:
 		finally:
 			conn.close()
 
+	def update_test(self, test_id: int, **fields) -> bool:
+		"""
+		Обновить поля теста. Поддерживаемые ключи:
+		title, content_type, text_content, photo_file_id, photo_path, question_text, options (dict или JSON-строка), is_active
+		"""
+		if not fields:
+			return False
+
+		allowed = {'title', 'content_type', 'text_content', 'photo_file_id', 'photo_path', 'question_text', 'options', 'is_active'}
+		update_parts = []
+		values = []
+		for k, v in fields.items():
+			if k not in allowed:
+				continue
+			# Если options — dict, сериализуем
+			if k == 'options' and isinstance(v, dict):
+				v = json.dumps(v, ensure_ascii=False)
+			# Преобразуем булевые is_active в 0/1 если нужно
+			if k == 'is_active' and isinstance(v, bool):
+				v = 1 if v else 0
+			update_parts.append(f"{k} = ?")
+			values.append(v)
+		if not update_parts:
+			return False
+
+		values.append(int(test_id))
+		sql = f"UPDATE tests SET {', '.join(update_parts)} WHERE id = ?"
+		conn = sqlite3.connect(self.db_path)
+		cursor = conn.cursor()
+		try:
+			cursor.execute(sql, tuple(values))
+			conn.commit()
+			return True
+		except Exception as e:
+			logger.info(f"Ошибка при обновлении теста {test_id}: {e}")
+			conn.rollback()
+			return False
+		finally:
+			conn.close()

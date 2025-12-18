@@ -20,3 +20,14 @@ class TestDeletion(StatesGroup):
 class ScheduleDeletion(StatesGroup):
     waiting_for_schedule_selection = State()
     waiting_for_confirmation = State()
+
+class EditTest(StatesGroup):
+    waiting_for_new_title = State()
+    waiting_for_new_text = State()
+    waiting_for_new_photo = State()
+    waiting_for_new_question = State()
+    waiting_for_new_options = State()
+
+class EditSession(StatesGroup):
+    choosing_field = State()
+    waiting_for_value = State()
