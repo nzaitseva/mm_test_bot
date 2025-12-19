@@ -1,4 +1,5 @@
-from aiogram import Router, F
+from aiogram import Router
+from aiogram import F
 import logging
 
 logger = logging.getLogger(__name__)
@@ -7,14 +8,14 @@ router = Router()
 
 @router.message()
 async def debug_message(message):
-    # Логируем всё тело сообщения для удобства отладки (не спамим пользователя)
+    # Log message body for debugging (do not reply to user)
     logger.info(f"[debug_router] message from {message.from_user.id}: text={message.text!r} keys={list(message.__dict__.keys())}")
 
 
 @router.callback_query()
 async def debug_callback(callback):
     logger.info(f"[debug_router] callback from {callback.from_user.id}: data={callback.data!r}")
-    # Нельзя забывать отвечать на callback - если это последний обработчик, ответим, чтобы клиент не висел
+    # Answer callback to prevent client spinner if this is the last handler
     try:
         await callback.answer()
     except Exception:
