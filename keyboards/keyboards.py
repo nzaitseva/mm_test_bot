@@ -9,6 +9,7 @@ from utils.callbacks import (
     session_done_cb,
     session_cancel_cb,
     test_option_cb,
+    detail_back_cb,
 )
 
 
@@ -142,7 +143,7 @@ def get_tests_view_keyboard(tests):
 def get_test_detail_keyboard(test_id):
     buttons = [
         [InlineKeyboardButton(text="✏️ Редактировать", callback_data=start_edit_cb.new(test_id=test_id))],
-        [InlineKeyboardButton(text=f"{E.BACK} Назад", callback_data=f"detail_back_{test_id}")]
+        [InlineKeyboardButton(text=f"{E.BACK} Назад", callback_data=detail_back_cb.new(test_id=test_id))]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

@@ -6,7 +6,12 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile, ReplyKeyboardRemove
 
 from utils.database import Database
-from keyboards.keyboards import get_test_detail_keyboard, get_edit_session_keyboard, get_tests_view_keyboard, get_cancel_keyboard
+from keyboards.keyboards import (
+    get_test_detail_keyboard,
+    get_edit_session_keyboard,
+    get_tests_view_keyboard,
+    get_cancel_keyboard,
+)
 from states import EditSession
 from utils.emoji import Emoji as E
 from utils.photo_manager import save_photo_from_message
@@ -16,6 +21,7 @@ from utils.callbacks import (
     session_edit_cb,
     session_done_cb,
     session_cancel_cb,
+    detail_back_cb,
 )
 
 logger = logging.getLogger(__name__)
@@ -23,11 +29,19 @@ db = Database()
 router = Router()
 
 
+# -----------------------------------
+# View test (CallbackData-based)
+# -----------------------------------
 @router.callback_query(view_test_cb.filter())
 async def view_test_detail(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
+    """
+    Show full details for a test. Uses callback factory view_test_cb.
+    Compatible with both aiogram injection (callback_data provided) and fallback (parse manually).
+    """
     logger.info(f"[view_test_detail] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
         callback_data = view_test_cb.parse(callback.data or "")
+
     if not db.is_admin(callback.from_user.id):
         await callback.answer()
         return
@@ -61,6 +75,7 @@ async def view_test_detail(callback: types.CallbackQuery, state: FSMContext, cal
     details_text = "\n".join(lines)
 
     try:
+        # Prefer sending local file if exists, otherwise file_id or text only
         if test[5] and os.path.exists(test[5]):
             await callback.message.answer_photo(photo=FSInputFile(test[5]))
             await callback.message.answer(details_text, parse_mode="HTML", reply_markup=get_test_detail_keyboard(test_id))
@@ -71,11 +86,83 @@ async def view_test_detail(callback: types.CallbackQuery, state: FSMContext, cal
             await callback.message.answer(details_text, parse_mode="HTML", reply_markup=get_test_detail_keyboard(test_id))
     except Exception:
         logger.exception("Error while sending test detail")
+        # fallback to plain text
         await callback.message.answer(details_text, parse_mode="HTML", reply_markup=get_test_detail_keyboard(test_id))
 
     await callback.answer()
 
 
+# -----------------------------------
+# Back handler (CallbackData-based)
+# -----------------------------------
+@router.callback_query(detail_back_cb.filter())
+async def detail_back(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
+    """
+    Handler for the "Back" button created via detail_back_cb factory.
+    Shows the tests list and attempts to delete the previous message (if possible).
+    Compatible with real aiogram CallbackData injection and with fallback.
+    """
+    logger.info(f"[detail_back] user={callback.from_user.id} data={callback.data!r}")
+    if callback_data is None:
+        callback_data = detail_back_cb.parse(callback.data or "")
+
+    if not db.is_admin(callback.from_user.id):
+        await callback.answer()
+        return
+
+    tests = db.get_all_tests()
+    if not tests:
+        await callback.message.answer("У вас нет тестов")
+        await callback.answer()
+        return
+
+    await callback.message.answer("Выберите тест для просмотра:", reply_markup=get_tests_view_keyboard(tests))
+    await callback.answer()
+    try:
+        # attempt to delete the detailed message to avoid duplicates
+        await callback.message.delete()
+    except Exception:
+        # ignore deletion errors (e.g., insufficient rights)
+        pass
+
+
+# -----------------------------------
+# Back handler (legacy/string format) — резервный
+# поддерживает callback.data вида "detail_back_{id}" (совместимость)
+# -----------------------------------
+@router.callback_query(lambda c: bool(c.data) and c.data.startswith("detail_back_"))
+async def detail_back_legacy(callback: types.CallbackQuery, state: FSMContext):
+    logger.info(f"[detail_back_legacy] user={callback.from_user.id} data={callback.data!r}")
+    # parse id from legacy string
+    try:
+        tid = callback.data.replace("detail_back_", "")
+        test_id = int(tid)
+    except Exception:
+        await callback.answer()
+        return
+
+    if not db.is_admin(callback.from_user.id):
+        await callback.answer()
+        return
+
+    tests = db.get_all_tests()
+    if not tests:
+        await callback.message.answer("У вас нет тестов")
+        await callback.answer()
+        return
+
+    # Show tests list (same as modern handler)
+    await callback.message.answer("Выберите тест для просмотра:", reply_markup=get_tests_view_keyboard(tests))
+    await callback.answer()
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+
+
+# -----------------------------------
+# Start edit session (CallbackData-based)
+# -----------------------------------
 @router.callback_query(start_edit_cb.filter())
 async def start_edit_session(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
     logger.info(f"[start_edit_session] user={callback.from_user.id} data={callback.data!r}")
@@ -104,6 +191,9 @@ async def start_edit_session(callback: types.CallbackQuery, state: FSMContext, c
     await callback.answer()
 
 
+# -----------------------------------
+# Choose field to edit (CallbackData-based)
+# -----------------------------------
 @router.callback_query(session_edit_cb.filter())
 async def session_choose_field(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
     logger.info(f"[session_choose_field] user={callback.from_user.id} data={callback.data!r}")
@@ -140,6 +230,182 @@ async def session_choose_field(callback: types.CallbackQuery, state: FSMContext,
     await callback.answer()
 
 
+# -----------------------------------
+# Text handler while waiting for value
+# - supports cancelling the FIELD edit (returns to edit session),
+#   and supports actual value updates.
+# -----------------------------------
+@router.message(EditSession.waiting_for_value, F.text)
+async def session_receive_value(message: types.Message, state: FSMContext):
+    logger.info(f"[session_receive_value] user={message.from_user.id} text={message.text!r}")
+
+    # Robust cancel detection: match "⚠️ Отмена" (E.CANCEL + 'Отмена') OR plain "Отмена" (case-insensitive)
+    text = (message.text or "").strip()
+    cancel_variants = {f"{E.CANCEL} Отмена".lower(), "отмена"}
+    if text.lower() in cancel_variants:
+        # If user cancels editing this field, return to choosing_field (do NOT clear whole session)
+        data = await state.get_data()
+        test_id = data.get("session_test_id")
+        if test_id:
+            await state.set_state(EditSession.choosing_field)
+            # remove reply keyboard and show inline edit keyboard
+            try:
+                await message.answer(" ", reply_markup=ReplyKeyboardRemove())
+            except Exception:
+                pass
+            await message.answer(f"{E.CANCEL} Изменение поля отменено. Выберите действие:", reply_markup=get_edit_session_keyboard(test_id))
+            logger.info(f"[session_receive_value] user={message.from_user.id} cancelled edit of field, returned to choosing_field for test_id={test_id}")
+            return
+        else:
+            # fallback: if session test id missing, clear state and go to main menu
+            await state.clear()
+            await message.answer("Изменение отменено", reply_markup=get_tests_view_keyboard(db.get_all_tests()))
+            return
+
+    # Otherwise — normal update flow
+    data = await state.get_data()
+    test_id = data.get("session_test_id")
+    field = data.get("session_field")
+    logger.debug(f"[session_receive_value] session_test_id={test_id} session_field={field}")
+    if not test_id or not field:
+        await message.answer(f"{E.ERROR} Внутренняя ошибка: test_id или поле не найдены")
+        await state.clear()
+        return
+
+    try:
+        if field == "title":
+            success = db.update_test(test_id, title=message.text)
+            if success:
+                await message.answer(f"{E.CONFIRM} Название обновлено", reply_markup=get_edit_session_keyboard(test_id))
+            else:
+                await message.answer(f"{E.ERROR} Не удалось обновить название")
+        elif field == "text":
+            val = message.text if message.text.strip() else None
+            success = db.update_test(test_id, text_content=val)
+            if success:
+                await message.answer(f"{E.CONFIRM} Текст обновлён", reply_markup=get_edit_session_keyboard(test_id))
+            else:
+                await message.answer(f"{E.ERROR} Не удалось обновить текст")
+        elif field == "question":
+            success = db.update_test(test_id, question_text=message.text)
+            if success:
+                await message.answer(f"{E.CONFIRM} Вопрос обновлён", reply_markup=get_edit_session_keyboard(test_id))
+            else:
+                await message.answer(f"{E.ERROR} Не удалось обновить вопрос")
+        elif field == "options":
+            options = {}
+            for line in message.text.splitlines():
+                if "::" in line:
+                    opt, res = line.split("::", 1)
+                    options[opt.strip()] = res.strip()
+            if len(options) < 2:
+                await message.answer(f"{E.ERROR} Нужно минимум 2 варианта. Попробуйте снова:")
+                return
+            success = db.update_test(test_id, options=options)
+            if success:
+                await message.answer(f"{E.CONFIRM} Варианты обновлены", reply_markup=get_edit_session_keyboard(test_id))
+            else:
+                await message.answer(f"{E.ERROR} Не удалось обновить варианты")
+        elif field == "photo":
+            await message.answer(f"{E.ERROR} Ожидается изображение. Пожалуйста, отправьте его как фото или файл (image/*).")
+        else:
+            await message.answer(f"{E.ERROR} Неподдерживаемое поле: {field}")
+    except Exception:
+        logger.exception("Error while updating field in session")
+        await message.answer(f"{E.ERROR} Ошибка при обновлении")
+
+    # return to choosing_field
+    await state.set_state(EditSession.choosing_field)
+
+
+# -----------------------------------
+# Photo handler in edit session (compressed)
+# -----------------------------------
+@router.message(EditSession.waiting_for_value, F.photo)
+async def session_receive_photo(message: types.Message, state: FSMContext):
+    logger.info(f"[session_receive_photo] user={message.from_user.id} photo=True")
+    data = await state.get_data()
+    test_id = data.get("session_test_id")
+    field = data.get("session_field")
+    if field != "photo":
+        logger.debug("[session_receive_photo] Ignored: field != 'photo'")
+        return
+
+    try:
+        photo_file_id = message.photo[-1].file_id
+    except Exception:
+        photo_file_id = None
+
+    try:
+        photo_path = ""
+        try:
+            photo_path = await save_photo_from_message(message)
+        except Exception:
+            logger.exception("Failed to save photo in edit session")
+            photo_path = ""
+
+        success = db.update_test(test_id, photo_file_id=photo_file_id, photo_path=photo_path)
+        if success:
+            await message.answer(f"{E.CONFIRM} Картинка обновлена", reply_markup=get_edit_session_keyboard(test_id))
+            try:
+                await message.answer(" ", reply_markup=ReplyKeyboardRemove())
+            except Exception:
+                pass
+        else:
+            await message.answer(f"{E.ERROR} Не удалось обновить картинку")
+    except Exception:
+        logger.exception("Error updating photo in session")
+        await message.answer(f"{E.ERROR} Ошибка при обновлении картинки")
+
+    await state.set_state(EditSession.choosing_field)
+
+
+# -----------------------------------
+# Document image handler in edit session (uncompressed)
+# -----------------------------------
+@router.message(EditSession.waiting_for_value, F.document)
+async def session_receive_document_image(message: types.Message, state: FSMContext):
+    logger.info(f"[session_receive_document_image] user={message.from_user.id} document=True mime={getattr(message.document,'mime_type',None)}")
+    if not getattr(message, "document", None):
+        return
+    if not getattr(message.document, "mime_type", "").startswith("image"):
+        return
+
+    data = await state.get_data()
+    test_id = data.get("session_test_id")
+    field = data.get("session_field")
+    if field != "photo":
+        logger.debug("[session_receive_document_image] Ignored: field != 'photo'")
+        return
+
+    try:
+        file_id = message.document.file_id
+        photo_path = ""
+        try:
+            photo_path = await save_photo_from_message(message)
+        except Exception:
+            logger.exception("Failed to save document image in edit session")
+            photo_path = ""
+
+        success = db.update_test(test_id, photo_file_id=file_id, photo_path=photo_path)
+        if success:
+            await message.answer(f"{E.CONFIRM} Картинка обновлена", reply_markup=get_edit_session_keyboard(test_id))
+            try:
+                await message.answer(" ", reply_markup=ReplyKeyboardRemove())
+            except Exception:
+                pass
+        else:
+            await message.answer(f"{E.ERROR} Не удалось обновить картинку")
+    except Exception:
+        logger.exception("Error while processing document image in session")
+        await message.answer(f"{E.ERROR} Ошибка при обновлении картинки")
+
+    await state.set_state(EditSession.choosing_field)
+
+
+# -----------------------------------
+# Done / Cancel callbacks for whole session
+# -----------------------------------
 @router.callback_query(session_done_cb.filter())
 async def session_done(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
     logger.info(f"[session_done] user={callback.from_user.id}")

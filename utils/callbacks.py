@@ -2,12 +2,8 @@
 Robust CallbackData factories.
 
 This module tries to import CallbackData from common aiogram locations and
-verifies that it behaves like the usual aiogram factory (callable returning
-a factory/class with .new/.parse/.filter). If that fails, a small fallback
-implementation is used which provides .new/.parse/.filter compatible API.
-
-The goal: make the rest of the code work regardless of minor differences
-between aiogram versions / environments, and avoid import-time TypeError.
+verifies that it behaves like the usual aiogram factory. If that fails,
+a small fallback implementation is used which provides .new/.parse/.filter API.
 """
 from typing import Callable, Dict, Any
 import logging
@@ -25,7 +21,6 @@ def _try_import_candidate(module_name: str, attr_name: str):
     except Exception:
         return None
 
-# Candidate import paths to try (some environments expose it in different modules)
 candidates = [
     ("aiogram.utils.callback_data", "CallbackData"),
     ("aiogram.filters.callback_data", "CallbackData"),
@@ -35,11 +30,8 @@ for modname, attr in candidates:
     Candidate = _try_import_candidate(modname, attr)
     if Candidate is None:
         continue
-
-    # Test whether Candidate can be used as factory: try calling Candidate("name","field")
     try:
         test_factory = Candidate("testcb", "f1")
-        # aiogram's CallbackData returns a class-like factory that provides .new/.parse/.filter
         has_new = hasattr(test_factory, "new")
         has_filter = hasattr(test_factory, "filter")
         if has_new and has_filter:
@@ -47,16 +39,14 @@ for modname, attr in candidates:
             logger.debug("Using CallbackData from %s.%s", modname, attr)
             break
         else:
-            # Candidate exists but doesn't provide expected API; skip
             logger.debug("Candidate CallbackData from %s.%s lacks expected API", modname, attr)
             continue
     except Exception as e:
         logger.debug("Candidate CallbackData from %s.%s not usable: %s", modname, attr, e)
         continue
 
-# Fallback minimal implementation
 if _CallbackFactory is None:
-    logger.info("Falling back to CallbackData fallback implementation (aiogram CallbackData not usable)")
+    logger.info("Falling back to CallbackData fallback implementation")
 
     class _CallbackDataFallback:
         def __init__(self, name: str, *parts: str):
@@ -64,7 +54,6 @@ if _CallbackFactory is None:
             self.parts = list(parts)
 
         def new(self, **kwargs) -> str:
-            # encode as "name:key=val|key2=val2"
             pairs = []
             for p in self.parts:
                 v = kwargs.get(p, "")
@@ -88,8 +77,7 @@ if _CallbackFactory is None:
                 logger.exception("Failed to parse callback_data %r: %s", callback_data, e)
                 return {}
 
-        def filter(self) -> Callable[[Any], bool]:
-            # Return simple predicate usable in router.callback_query(predicate)
+        def filter(self) -> Callable:
             def _pred(callback):
                 try:
                     data = getattr(callback, "data", None)
@@ -100,10 +88,9 @@ if _CallbackFactory is None:
 
     CallbackFactory = _CallbackDataFallback
 else:
-    # Use the real aiogram factory as CallbackFactory (callable)
     CallbackFactory = _CallbackFactory
 
-# Create common factories used across the project
+# factories used across project
 select_test_cb = CallbackFactory("select", "test_id")
 delete_test_cb = CallbackFactory("delete", "test_id")
 view_test_cb = CallbackFactory("view", "test_id")
@@ -112,6 +99,8 @@ session_edit_cb = CallbackFactory("session", "test_id", "field")
 session_done_cb = CallbackFactory("sessiondone", "test_id")
 session_cancel_cb = CallbackFactory("sessioncancel", "test_id")
 test_option_cb = CallbackFactory("opt", "test_id", "option")
+# new: detail/back factory
+detail_back_cb = CallbackFactory("detailback", "test_id")
 
-# Expose name for compatibility with code expecting CallbackData class-like object
+# expose name for compatibility
 CallbackData = CallbackFactory  # type: ignore
