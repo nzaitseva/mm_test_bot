@@ -1,13 +1,11 @@
-from aiogram import Router, F, types
-from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
-from aiogram.types import FSInputFile, ReplyKeyboardRemove
-
 import logging
 import pytz
 from datetime import datetime
-import os
-import json
+
+from aiogram import Router, F, types
+from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.types import ReplyKeyboardRemove
 
 from utils.database import Database
 from keyboards.keyboards import get_admin_main_menu, get_tests_view_keyboard, get_settings_keyboard, get_tests_list_keyboard, get_schedules_list_keyboard

@@ -3,7 +3,6 @@ import asyncio
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
-import logging
 
 from handlers.admin import router as admin_router
 from handlers.user_handlers import router as user_router
