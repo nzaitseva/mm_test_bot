@@ -6,7 +6,7 @@ from . import schedule_handlers
 from . import delete_handlers
 from . import view_edit_handlers
 
-# central admin router
+# Create a central admin router with attached specific routers
 router = Router()
 
 router.include_router(main_handlers.router)
