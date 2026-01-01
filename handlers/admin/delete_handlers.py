@@ -1,24 +1,29 @@
+import logging
+
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
 
-from utils.database import Database
 from keyboards.keyboards import get_tests_list_keyboard, get_confirmation_keyboard
 from states import TestDeletion
+from utils.database import Database
 from utils.emoji import Emoji as E
 from utils.callbacks import delete_test_cb
+from utils.config import load_config
+from filters.admin_filters import IsAdminFilter
 
-import logging
+config = load_config()
+
+
 
 logger = logging.getLogger(__name__)
 db = Database()
 router = Router()
+router.message.filter(IsAdminFilter(config.admin_ids))
+router.callback_query.filter(IsAdminFilter(config.admin_ids))
 
-
-@router.message(lambda msg: bool(msg.text) and msg.text.strip() == f"{E.DELETE} Удалить тест")
+@router.message(F.text == f"{E.DELETE} Удалить тест")
 async def start_test_deletion(message: types.Message, state: FSMContext):
     logger.info(f"[start_test_deletion] from={message.from_user.id}")
-    if not db.is_admin(message.from_user.id):
-        return
 
     tests = db.get_all_tests()
     if not tests:

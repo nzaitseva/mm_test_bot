@@ -1,3 +1,13 @@
+"""
+Entrance to admin panel (via /admin command):
+    - `admin_start`
+
+And main buttons (UX):
+    - `show_my_tests` (a list of all added tests)
+    - `show_settings` (bot settings)
+    - `show_active_schedules` (tests planned to be sent to a channel)
+"""
+
 import logging
 import pytz
 from datetime import datetime
@@ -8,13 +18,22 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import ReplyKeyboardRemove
 
 from utils.database import Database
-from keyboards.keyboards import get_admin_main_menu, get_tests_view_keyboard, get_settings_keyboard, get_tests_list_keyboard, get_schedules_list_keyboard
+from keyboards.keyboards import get_admin_main_menu, get_tests_view_keyboard, get_settings_keyboard, \
+    get_schedules_list_keyboard
 from utils.emoji import Emoji as E
+from filters.admin_filters import IsAdminFilter
+from utils.config import load_config
 
 logger = logging.getLogger(__name__)
-db = Database()
-router = Router()
+config = load_config()
 
+db = Database()
+
+# Add filter to the router
+# So that ALL handlers in this file are available only to admins
+router = Router()
+router.message.filter(IsAdminFilter(config.admin_ids))
+router.callback_query.filter(IsAdminFilter(config.admin_ids))
 
 @router.message(Command("admin"))
 async def admin_start(message: types.Message, state: FSMContext):
@@ -25,14 +44,6 @@ async def admin_start(message: types.Message, state: FSMContext):
         logger.debug("Failed to clear FSM state on /admin (non-fatal)")
 
     logger.info(f"[admin_start] user={message.from_user.id}")
-    if not db.is_admin(message.from_user.id):
-        await message.answer(f"{E.CANCEL} У вас нет прав администратора")
-        return
-
-    try:
-        await message.answer(" ", reply_markup=ReplyKeyboardRemove())
-    except Exception:
-        pass
 
     await message.answer(
         f"{E.HAND} Добро пожаловать в панель администратора!\n"
@@ -41,11 +52,9 @@ async def admin_start(message: types.Message, state: FSMContext):
     )
 
 
-@router.message(lambda msg: bool(msg.text) and msg.text.strip() == f"{E.LIST} Мои тесты")
+@router.message(F.text == f"{E.LIST} Мои тесты")
 async def show_my_tests(message: types.Message):
     logger.info(f"[show_my_tests] from={message.from_user.id}")
-    if not db.is_admin(message.from_user.id):
-        return
 
     tests = db.get_all_tests()
     if not tests:
@@ -55,11 +64,9 @@ async def show_my_tests(message: types.Message):
     await message.answer("Выберите тест для просмотра:", reply_markup=get_tests_view_keyboard(tests))
 
 
-@router.message(lambda msg: bool(msg.text) and ("Настройки" in msg.text or msg.text.strip() == f"{E.SETTINGS} Настройки"))
+@router.message(F.text == f"{E.SETTINGS} Настройки")
 async def show_settings(message: types.Message):
     logger.info(f"[show_settings] from={message.from_user.id} text={message.text!r}")
-    if not db.is_admin(message.from_user.id):
-        return
 
     timezone = db.get_timezone()
     text = (
@@ -70,11 +77,9 @@ async def show_settings(message: types.Message):
     await message.answer(text, parse_mode="HTML", reply_markup=get_settings_keyboard())
 
 
-@router.message(lambda msg: bool(msg.text) and msg.text.strip() == f"{E.SCHEDULES} Активные расписания")
+@router.message(F.text == f"{E.SCHEDULES} Активные расписания")
 async def show_active_schedules(message: types.Message):
     logger.info(f"[show_active_schedules] from={message.from_user.id}")
-    if not db.is_admin(message.from_user.id):
-        return
 
     schedules = db.get_active_schedules()
     if not schedules:

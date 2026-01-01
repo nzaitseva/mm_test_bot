@@ -1,5 +1,6 @@
 import os
 import asyncio
+from dataclasses import dataclass
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -12,30 +13,35 @@ from utils.database import Database
 from utils.scheduler import SchedulerManager
 from utils.setup_logging import setup_logging
 from utils.emoji import Emoji as E
+from utils.config import load_config
 
 # load env
-load_dotenv()
+#load_dotenv()
+#BOT_TOKEN = os.getenv('BOT_TOKEN')
+#ADMIN_IDS = [int(x.strip()) for x in os.getenv('ADMIN_IDS', '').split(',') if x.strip()]
+
+
+config = load_config()
 
 logger = setup_logging()
-BOT_TOKEN = os.getenv('BOT_TOKEN')
-ADMIN_IDS = [int(x.strip()) for x in os.getenv('ADMIN_IDS', '').split(',') if x.strip()]
+
 
 async def main():
-    if not BOT_TOKEN:
+    if not config.bot_token:
         logger.error(f"{E.ERROR} BOT_TOKEN not found")
         return
 
     try:
-        bot = Bot(token=BOT_TOKEN)
+        bot = Bot(token=config.bot_token)
         storage = MemoryStorage()
         dp = Dispatcher(storage=storage)
 
-        db = Database()
+        db = Database() # TODO: почему в каждом файле свой экземпляр Database?
 
         # add admins from env
-        for admin_id in ADMIN_IDS:
+        for admin_id in config.admin_ids:
             db.add_admin(admin_id)
-        logger.info(f"{E.INFO} Admins set: {ADMIN_IDS}")
+        logger.info(f"{E.INFO} Admins set: {config.admin_ids}")
 
         # include routers: functional routers first, debug last
         dp.include_router(user_router)
