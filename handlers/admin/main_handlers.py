@@ -15,14 +15,14 @@ from datetime import datetime
 from aiogram import Router, F, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import ReplyKeyboardRemove
 
+from utils.emoji import Emoji as E
 from utils.database import Database
+from utils.config import load_config
+from filters.admin_filters import IsAdminFilter
 from keyboards.keyboards import get_admin_main_menu, get_tests_view_keyboard, get_settings_keyboard, \
     get_schedules_list_keyboard
-from utils.emoji import Emoji as E
-from filters.admin_filters import IsAdminFilter
-from utils.config import load_config
+
 
 logger = logging.getLogger(__name__)
 config = load_config()
@@ -100,4 +100,7 @@ async def show_active_schedules(message: types.Message):
 
         text += f"{E.STAPLE} {test_title}\n  {E.CALENDAR} {formatted_time}\n  {E.CHANNEL} {channel_id}\n\n"
 
-    await message.answer(text + "Нажмите на расписание чтобы удалить его:", reply_markup=get_schedules_list_keyboard(schedules))
+    await message.answer(
+        text + "Нажмите на расписание чтобы удалить его:",
+        reply_markup=get_schedules_list_keyboard(schedules)
+    )
