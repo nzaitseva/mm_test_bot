@@ -27,7 +27,6 @@ from keyboards.keyboards import get_admin_main_menu, get_tests_view_keyboard, ge
 logger = logging.getLogger(__name__)
 config = load_config()
 
-db = Database()
 
 # Add filter to the router
 # So that ALL handlers in this file are available only to admins
@@ -53,7 +52,7 @@ async def admin_start(message: types.Message, state: FSMContext):
 
 
 @router.message(F.text == f"{E.LIST} Мои тесты")
-async def show_my_tests(message: types.Message):
+async def show_my_tests(message: types.Message, db: Database):
     logger.info(f"[show_my_tests] from={message.from_user.id}")
 
     tests = db.get_all_tests()
@@ -65,7 +64,7 @@ async def show_my_tests(message: types.Message):
 
 
 @router.message(F.text == f"{E.SETTINGS} Настройки")
-async def show_settings(message: types.Message):
+async def show_settings(message: types.Message, db: Database):
     logger.info(f"[show_settings] from={message.from_user.id} text={message.text!r}")
 
     timezone = db.get_timezone()
@@ -78,7 +77,7 @@ async def show_settings(message: types.Message):
 
 
 @router.message(F.text == f"{E.SCHEDULES} Активные расписания")
-async def show_active_schedules(message: types.Message):
+async def show_active_schedules(message: types.Message, db: Database):
     logger.info(f"[show_active_schedules] from={message.from_user.id}")
 
     schedules = db.get_active_schedules()

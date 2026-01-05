@@ -45,3 +45,5 @@ class Emoji:
 	DARTS = "🎯"
 	ROCKET = "🚀"
 	STOPPED = "🛑"
+	SEARCH = "🔎"
+	QUESTION = "❓"

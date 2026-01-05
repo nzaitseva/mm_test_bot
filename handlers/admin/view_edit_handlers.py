@@ -1,11 +1,30 @@
-import logging
+"""
+View and edit added tests.
+
+Functions for viewing tests:
+    - `view_test_detail`
+    - `detail_back`
+    - `detail_back_legacy` - legacy/string handler, supports callback.data as "detail_back_{id}" (compatbility)
+
+Functions for editing tests:
+    - `start_edit_session` (CallbackData-based)
+    - `session_choose_field` (CallbackData-based)
+    - `session_receive_value` - Text handler: waiting for value,
+                                supports cancelling the FIELD edit (returns to edit session)
+                                and supports actual value updates.
+    - `session_receive_photo` - Photo handler in edit session (compressed)
+    - `session_receive_document_image` - Document image handler in edit session (uncompressed)
+    - `session_done` - Done / Cancel callbacks for whole session
+    - `session_cancel`
+"""
 import os
 import json
+import logging
+
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile, ReplyKeyboardRemove
 
-from utils.database import Database
 from keyboards.keyboards import (
     get_test_detail_keyboard,
     get_edit_session_keyboard,
@@ -13,6 +32,7 @@ from keyboards.keyboards import (
     get_cancel_keyboard,
 )
 from states import EditSession
+from utils.database import Database
 from utils.emoji import Emoji as E
 from utils.photo_manager import save_photo_from_message
 from utils.callbacks import (
@@ -23,20 +43,21 @@ from utils.callbacks import (
     session_cancel_cb,
     detail_back_cb,
 )
+from utils.config import load_config
+from filters.admin_filters import IsAdminFilter
 
 logger = logging.getLogger(__name__)
-db = Database()
+config = load_config()
+
 router = Router()
+router.message.filter(IsAdminFilter(config.admin_ids))
+router.callback_query.filter(IsAdminFilter(config.admin_ids))
 
 
-# -----------------------------------
-# View test (CallbackData-based)
-# -----------------------------------
 @router.callback_query(view_test_cb.filter())
-async def view_test_detail(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
+async def view_test_detail(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
     """
     Show full details for a test. Uses callback factory view_test_cb.
-    Compatible with both aiogram injection (callback_data provided) and fallback (parse manually).
     """
     logger.info(f"[view_test_detail] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
@@ -92,11 +113,8 @@ async def view_test_detail(callback: types.CallbackQuery, state: FSMContext, cal
     await callback.answer()
 
 
-# -----------------------------------
-# Back handler (CallbackData-based)
-# -----------------------------------
 @router.callback_query(detail_back_cb.filter())
-async def detail_back(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
+async def detail_back(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
     """
     Handler for the "Back" button created via detail_back_cb factory.
     Shows the tests list and attempts to delete the previous message (if possible).
@@ -126,12 +144,8 @@ async def detail_back(callback: types.CallbackQuery, state: FSMContext, callback
         pass
 
 
-# -----------------------------------
-# Back handler (legacy/string format) — резервный
-# поддерживает callback.data вида "detail_back_{id}" (совместимость)
-# -----------------------------------
 @router.callback_query(lambda c: bool(c.data) and c.data.startswith("detail_back_"))
-async def detail_back_legacy(callback: types.CallbackQuery, state: FSMContext):
+async def detail_back_legacy(callback: types.CallbackQuery, state: FSMContext, db: Database):
     logger.info(f"[detail_back_legacy] user={callback.from_user.id} data={callback.data!r}")
     # parse id from legacy string
     try:
@@ -160,11 +174,8 @@ async def detail_back_legacy(callback: types.CallbackQuery, state: FSMContext):
         pass
 
 
-# -----------------------------------
-# Start edit session (CallbackData-based)
-# -----------------------------------
 @router.callback_query(start_edit_cb.filter())
-async def start_edit_session(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
+async def start_edit_session(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
     logger.info(f"[start_edit_session] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
         callback_data = start_edit_cb.parse(callback.data or "")
@@ -191,11 +202,8 @@ async def start_edit_session(callback: types.CallbackQuery, state: FSMContext, c
     await callback.answer()
 
 
-# -----------------------------------
-# Choose field to edit (CallbackData-based)
-# -----------------------------------
 @router.callback_query(session_edit_cb.filter())
-async def session_choose_field(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
+async def session_choose_field(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
     logger.info(f"[session_choose_field] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
         callback_data = session_edit_cb.parse(callback.data or "")
@@ -230,13 +238,8 @@ async def session_choose_field(callback: types.CallbackQuery, state: FSMContext,
     await callback.answer()
 
 
-# -----------------------------------
-# Text handler while waiting for value
-# - supports cancelling the FIELD edit (returns to edit session),
-#   and supports actual value updates.
-# -----------------------------------
 @router.message(EditSession.waiting_for_value, F.text)
-async def session_receive_value(message: types.Message, state: FSMContext):
+async def session_receive_value(message: types.Message, state: FSMContext, db: Database):
     logger.info(f"[session_receive_value] user={message.from_user.id} text={message.text!r}")
 
     # Robust cancel detection: match "⚠️ Отмена" (E.CANCEL + 'Отмена') OR plain "Отмена" (case-insensitive)
@@ -318,11 +321,8 @@ async def session_receive_value(message: types.Message, state: FSMContext):
     await state.set_state(EditSession.choosing_field)
 
 
-# -----------------------------------
-# Photo handler in edit session (compressed)
-# -----------------------------------
 @router.message(EditSession.waiting_for_value, F.photo)
-async def session_receive_photo(message: types.Message, state: FSMContext):
+async def session_receive_photo(message: types.Message, state: FSMContext, db: Database):
     logger.info(f"[session_receive_photo] user={message.from_user.id} photo=True")
     data = await state.get_data()
     test_id = data.get("session_test_id")
@@ -360,11 +360,8 @@ async def session_receive_photo(message: types.Message, state: FSMContext):
     await state.set_state(EditSession.choosing_field)
 
 
-# -----------------------------------
-# Document image handler in edit session (uncompressed)
-# -----------------------------------
 @router.message(EditSession.waiting_for_value, F.document)
-async def session_receive_document_image(message: types.Message, state: FSMContext):
+async def session_receive_document_image(message: types.Message, state: FSMContext, db: Database):
     logger.info(f"[session_receive_document_image] user={message.from_user.id} document=True mime={getattr(message.document,'mime_type',None)}")
     if not getattr(message, "document", None):
         return
@@ -403,11 +400,8 @@ async def session_receive_document_image(message: types.Message, state: FSMConte
     await state.set_state(EditSession.choosing_field)
 
 
-# -----------------------------------
-# Done / Cancel callbacks for whole session
-# -----------------------------------
 @router.callback_query(session_done_cb.filter())
-async def session_done(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
+async def session_done(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
     logger.info(f"[session_done] user={callback.from_user.id}")
     if callback_data is None:
         callback_data = session_done_cb.parse(callback.data or "")
@@ -425,7 +419,7 @@ async def session_done(callback: types.CallbackQuery, state: FSMContext, callbac
 
 
 @router.callback_query(session_cancel_cb.filter())
-async def session_cancel(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
+async def session_cancel(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
     logger.info(f"[session_cancel] user={callback.from_user.id}")
     if callback_data is None:
         callback_data = session_cancel_cb.parse(callback.data or "")

@@ -1,41 +1,44 @@
 # handlers/settings_handlers.py
 import pytz
 import logging
+
 from aiogram import Router, F, types
-from utils.database import Database
-from keyboards.keyboards import get_settings_keyboard, get_timezone_keyboard, get_admin_main_menu
+
 from utils.emoji import Emoji as E
+from utils.database import Database
+from utils.config import load_config
+from filters.admin_filters import IsAdminFilter
+from keyboards.keyboards import get_settings_keyboard, get_timezone_keyboard, get_admin_main_menu
+
 
 logger = logging.getLogger(__name__)
+config = load_config()
 
 router = Router()
-db = Database()
+router.message.filter(IsAdminFilter(config.admin_ids))
+router.callback_query.filter(IsAdminFilter(config.admin_ids))
 
 
-def get_settings_text():
+def get_settings_text(db: Database):
     current_timezone = db.get_timezone()
     return (
         f"{E.SETTINGS} <b>Настройки бота</b>\n\n"
-        f"📍 <b>Текущий часовой пояс:</b> {current_timezone}\n\n"
+        f"{E.STAPLE} <b>Текущий часовой пояс:</b> {current_timezone}\n\n"
         f"Выберите настройку для изменения:"
     )
 
 
-# Более устойчивый handler для нажатия кнопки "⚙️ Настройки"
-@router.message(lambda msg: bool(msg.text) and "Настройки" in msg.text)
-async def show_settings(message: types.Message):
-    if not db.is_admin(message.from_user.id):
-        return
-
-    await message.answer(get_settings_text(), parse_mode="HTML", reply_markup=get_settings_keyboard())
+@router.message(F.text == f"{E.SETTINGS} Настройки")
+async def show_settings(message: types.Message, db: Database):
+    await message.answer(get_settings_text(db), parse_mode="HTML", reply_markup=get_settings_keyboard())
 
 
 @router.callback_query(F.data == "settings_timezone")
-async def show_timezone_settings(callback: types.CallbackQuery):
+async def show_timezone_settings(callback: types.CallbackQuery, db: Database):
     current_timezone = db.get_timezone()
     await callback.message.edit_text(
         f"{E.CLOCK} <b>Настройка часового пояса</b>\n\n"
-        f"📍 <b>Текущий пояс:</b> {current_timezone}\n\n"
+        f"{E.STAPLE} <b>Текущий пояс:</b> {current_timezone}\n\n"
         f"Выберите новый часовой пояс:",
         parse_mode="HTML",
         reply_markup=get_timezone_keyboard()
@@ -44,9 +47,12 @@ async def show_timezone_settings(callback: types.CallbackQuery):
 
 
 @router.callback_query(F.data.startswith("timezone_"))
-async def set_timezone(callback: types.CallbackQuery):
+async def set_timezone(callback: types.CallbackQuery, db: Database):
     if callback.data == "timezone_back":
-        await callback.message.edit_text(get_settings_text(), parse_mode="HTML", reply_markup=get_settings_keyboard())
+        await callback.message.edit_text(
+            get_settings_text(db),
+            parse_mode="HTML", reply_markup=get_settings_keyboard()
+        )
         await callback.answer()
         return
 
@@ -61,14 +67,17 @@ async def set_timezone(callback: types.CallbackQuery):
                 parse_mode="HTML"
             )
         else:
-            await callback.message.edit_text(f"{E.ERROR} Ошибка при сохранении часового пояса", parse_mode="HTML")
+            await callback.message.edit_text(
+                f"{E.ERROR} Ошибка при сохранении часового пояса", parse_mode="HTML")
     except pytz.UnknownTimeZoneError:
-        await callback.message.edit_text(f"{E.ERROR} Неизвестный часовой пояс: {timezone}", parse_mode="HTML")
+        await callback.message.edit_text(
+            f"{E.ERROR} Неизвестный часовой пояс: {timezone}", parse_mode="HTML")
 
     await callback.answer()
 
 
 @router.callback_query(F.data == "settings_back")
 async def settings_back(callback: types.CallbackQuery):
-    await callback.message.edit_text(f"{E.HAND} Возврат в главное меню", reply_markup=get_admin_main_menu())
+    await callback.message.edit_text(
+        f"{E.HAND} Возврат в главное меню", reply_markup=get_admin_main_menu())
     await callback.answer()

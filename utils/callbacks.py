@@ -49,10 +49,12 @@ if _CallbackFactory is None:
     logger.info("Falling back to CallbackData fallback implementation")
 
     class _CallbackDataFallback:
+        # Remembers the prefix (e.g. "select") and field names (e.g. "test_id")
         def __init__(self, name: str, *parts: str):
             self.name = name
             self.parts = list(parts)
 
+        # Assembles a string. E.g. `select_test_cb.new(test_id=5)`-> "select:test_id=5
         def new(self, **kwargs) -> str:
             pairs = []
             for p in self.parts:
@@ -61,6 +63,7 @@ if _CallbackFactory is None:
                 pairs.append(f"{p}={sval}")
             return f"{self.name}:" + "|".join(pairs)
 
+        # parses the string back into a dictionary
         def parse(self, callback_data: str) -> Dict[str, str]:
             try:
                 if not callback_data.startswith(self.name + ":"):
@@ -77,6 +80,7 @@ if _CallbackFactory is None:
                 logger.exception("Failed to parse callback_data %r: %s", callback_data, e)
                 return {}
 
+        # Simply checks whether a string starts with the required prefix (e.g., select:).
         def filter(self) -> Callable:
             def _pred(callback):
                 try:

@@ -1,25 +1,36 @@
+"""
+Handlers for scheduling tests for posting to channel.
+Main functions:
+    - `start_scheduling` -> state `ScheduleCreation.waiting_for_test_selection`
+    - `process_test_selection` -> state `ScheduleCreation.waiting_for_channel`
+    - `process_channel` -> state `ScheduleCreation.waiting_for_time`
+    - `process_time` -> finish and go to main admin panel
+"""
+import pytz
 import logging
+from datetime import datetime
+
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
 
-from utils.database import Database
 from keyboards.keyboards import get_tests_list_keyboard, get_cancel_keyboard, get_admin_main_menu
 from states import ScheduleCreation
+from utils.database import Database
 from utils.emoji import Emoji as E
 from utils.callbacks import select_test_cb
-import pytz
-from datetime import datetime
+from utils.config import load_config
+from filters.admin_filters import IsAdminFilter
 
 logger = logging.getLogger(__name__)
-db = Database()
+config = load_config()
+
 router = Router()
+router.message.filter(IsAdminFilter(config.admin_ids))
+router.callback_query.filter(IsAdminFilter(config.admin_ids))
 
-
-@router.message(lambda msg: bool(msg.text) and msg.text.strip() == f"{E.SCHEDULE} Запланировать отправку")
-async def start_scheduling(message: types.Message, state: FSMContext):
+@router.message(F.text == f"{E.SCHEDULE} Запланировать отправку")
+async def start_scheduling(message: types.Message, state: FSMContext, db: Database):
     logger.info(f"[start_scheduling] from={message.from_user.id}")
-    if not db.is_admin(message.from_user.id):
-        return
 
     tests = db.get_all_tests()
     if not tests:
@@ -32,13 +43,8 @@ async def start_scheduling(message: types.Message, state: FSMContext):
 
 @router.callback_query(select_test_cb.filter())
 async def process_test_selection(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
-    """
-    callback_data may be injected by aiogram when using real CallbackData.
-    If not injected (fallback), parse it manually.
-    """
     logger.info(f"[process_test_selection] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        # fallback parse
         callback_data = select_test_cb.parse(callback.data or "")
 
     try:
@@ -74,7 +80,7 @@ async def process_channel(message: types.Message, state: FSMContext):
 
 
 @router.message(ScheduleCreation.waiting_for_time)
-async def process_time(message: types.Message, state: FSMContext):
+async def process_time(message: types.Message, state: FSMContext, db: Database):
     logger.info(f"[process_time] from={message.from_user.id} text={message.text!r}")
     if message.text == f"{E.CANCEL} Отмена":
         await state.clear()

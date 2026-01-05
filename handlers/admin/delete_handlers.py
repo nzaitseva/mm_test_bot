@@ -1,3 +1,6 @@
+""""
+Functions for deleting tests from admin panel.
+"""
 import logging
 
 from aiogram import Router, F, types
@@ -13,16 +16,14 @@ from filters.admin_filters import IsAdminFilter
 
 config = load_config()
 
-
-
 logger = logging.getLogger(__name__)
-db = Database()
+
 router = Router()
 router.message.filter(IsAdminFilter(config.admin_ids))
 router.callback_query.filter(IsAdminFilter(config.admin_ids))
 
 @router.message(F.text == f"{E.DELETE} Удалить тест")
-async def start_test_deletion(message: types.Message, state: FSMContext):
+async def start_test_deletion(message: types.Message, state: FSMContext, db: Database):
     logger.info(f"[start_test_deletion] from={message.from_user.id}")
 
     tests = db.get_all_tests()
@@ -35,14 +36,9 @@ async def start_test_deletion(message: types.Message, state: FSMContext):
 
 
 @router.callback_query(delete_test_cb.filter())
-async def process_test_selection_for_deletion(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
-    """
-    callback_data may be injected by aiogram when using real CallbackData.
-    If not injected (fallback), parse it manually.
-    """
+async def process_test_selection_for_deletion(callback: types.CallbackQuery, state: FSMContext, db: Database,callback_data: dict | None = None):
     logger.info(f"[process_test_selection_for_deletion] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        # fallback parse
         callback_data = delete_test_cb.parse(callback.data or "")
 
     try:
@@ -68,7 +64,7 @@ async def process_test_selection_for_deletion(callback: types.CallbackQuery, sta
 
 
 @router.callback_query(TestDeletion.waiting_for_confirmation, F.data == "confirm_delete")
-async def confirm_test_deletion(callback: types.CallbackQuery, state: FSMContext):
+async def confirm_test_deletion(callback: types.CallbackQuery, state: FSMContext, db: Database):
     logger.info(f"[confirm_test_deletion] user={callback.from_user.id}")
     data = await state.get_data()
     test_id = data.get("test_id")

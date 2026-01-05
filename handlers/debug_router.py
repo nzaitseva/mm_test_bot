@@ -1,5 +1,4 @@
 from aiogram import Router
-from aiogram import F
 import logging
 
 logger = logging.getLogger(__name__)

@@ -1,0 +1,20 @@
+bot.py — главная точка входа, порядок регистраций роутеров, storage, scheduler.
+handlers/admin/main_handlers.py — вход в админ‑панель и главные кнопки (UX).
+handlers/admin/create_handlers.py — понять TestCreation FSM.
+handlers/admin/schedule_handlers.py — понять расписание и timezone handling.
+handlers/admin/view_edit_handlers.py — просмотр и EditSession (сложный сценарий).
+handlers/admin/delete_handlers.py — удаление тестов, подтверждения.
+handlers/user_handlers.py — отправка тестов в канал и обработка ответов (test_option).
+keyboards/keyboards.py — все клавиатуры, callback_data generation.
+utils/callbacks.py — фабрики CallbackData (важно), после вернуться к view_edit_handlers.py и keyboards.py
+utils/database.py — схема и методы работы с БД.
+utils/photo_manager.py — сохранение фото (в т.ч. cleanup).
+handlers/debug_router.py — ловушка для необработанных событий (как настроить).
+tests/ — тесты, чтобы понять контракты.
+------
+Вопросы под коду:
+
+1. В schedule_handlers можно ли один раз обработать кнопку "Отмена"?
+2. Переписать фабрики (и те части кода, где всё парситься руками - view_edit_handlers.py и keyboards.py)
+    Убрать обратную совместимость с aiogram 2 у callbacks.py
+3. Можно ли переписать database.py используя sqlite?

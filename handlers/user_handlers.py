@@ -1,15 +1,19 @@
+""""
+Sending tests to a channel and processing responses (test_option)
+"""
+import os
 import json
 import logging
-import os
 
 from aiogram import Router, F, types
 from aiogram.filters import Command
+from aiogram.types import FSInputFile
 
 from utils.database import Database
-from aiogram.types import FSInputFile
-from keyboards.keyboards import get_test_options_keyboard
 from utils.emoji import Emoji as E
 from utils.callbacks import test_option_cb
+from keyboards.keyboards import get_test_options_keyboard
+
 
 logger = logging.getLogger(__name__)
 

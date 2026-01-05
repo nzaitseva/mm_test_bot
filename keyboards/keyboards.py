@@ -1,4 +1,5 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton,ReplyKeyboardMarkup, KeyboardButton
+
 from utils.emoji import Emoji as E
 from utils.callbacks import (
     select_test_cb,
@@ -98,7 +99,6 @@ def get_schedules_list_keyboard(schedules):
 
 
 def get_test_options_keyboard(options, test_id):
-    """Создает клавиатуру с вариантами ответов для теста"""
     buttons = []
     for option_text in options.keys():
         button_text = option_text[:30] + "..." if len(option_text) > 30 else option_text
@@ -136,13 +136,13 @@ def get_tests_view_keyboard(tests):
     buttons = []
     for test_id, title in tests:
         cb = view_test_cb.new(test_id=test_id)
-        buttons.append([InlineKeyboardButton(text=f"🔎 {title}", callback_data=cb)])
+        buttons.append([InlineKeyboardButton(text=f"{E.SEARCH} {title}", callback_data=cb)])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def get_test_detail_keyboard(test_id):
     buttons = [
-        [InlineKeyboardButton(text="✏️ Редактировать", callback_data=start_edit_cb.new(test_id=test_id))],
+        [InlineKeyboardButton(text=f"{E.EDIT}️ Редактировать", callback_data=start_edit_cb.new(test_id=test_id))],
         [InlineKeyboardButton(text=f"{E.BACK} Назад", callback_data=detail_back_cb.new(test_id=test_id))]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -150,12 +150,12 @@ def get_test_detail_keyboard(test_id):
 
 def get_edit_session_keyboard(test_id):
     buttons = [
-        [InlineKeyboardButton(text="✏️ Название", callback_data=session_edit_cb.new(test_id=test_id, field="title")),
-         InlineKeyboardButton(text="✏️ Текст", callback_data=session_edit_cb.new(test_id=test_id, field="text"))],
-        [InlineKeyboardButton(text="🖼️ Картинка", callback_data=session_edit_cb.new(test_id=test_id, field="photo")),
-         InlineKeyboardButton(text="❓ Вопрос", callback_data=session_edit_cb.new(test_id=test_id, field="question"))],
-        [InlineKeyboardButton(text="📝 Варианты", callback_data=session_edit_cb.new(test_id=test_id, field="options"))],
-        [InlineKeyboardButton(text="✅ Готово", callback_data=session_done_cb.new(test_id=test_id)),
-         InlineKeyboardButton(text="⬅️ Отмена", callback_data=session_cancel_cb.new(test_id=test_id))]
+        [InlineKeyboardButton(text=f"{E.EDIT}️ Название", callback_data=session_edit_cb.new(test_id=test_id, field="title")),
+         InlineKeyboardButton(text=f"{E.EDIT}️ Текст", callback_data=session_edit_cb.new(test_id=test_id, field="text"))],
+        [InlineKeyboardButton(text=f"{E.PHOTO} Картинка", callback_data=session_edit_cb.new(test_id=test_id, field="photo")),
+         InlineKeyboardButton(text=f"{E.QUESTION} Вопрос", callback_data=session_edit_cb.new(test_id=test_id, field="question"))],
+        [InlineKeyboardButton(text=f"{E.TEXT} Варианты", callback_data=session_edit_cb.new(test_id=test_id, field="options"))],
+        [InlineKeyboardButton(text=f"{E.CONFIRM} Готово", callback_data=session_done_cb.new(test_id=test_id)),
+         InlineKeyboardButton(text=f"{E.PREV} Отмена", callback_data=session_cancel_cb.new(test_id=test_id))]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)

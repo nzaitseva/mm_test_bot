@@ -17,7 +17,6 @@ class Database:
             os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self.init_db()
 
-    # context manager for connection - callers should use with self.connect() as conn:
     def connect(self):
         return sqlite3.connect(self.db_path)
 
@@ -91,7 +90,7 @@ class Database:
         finally:
             conn.close()
 
-    # small helper to save photo via existing utility (kept here for convenience)
+    # small helper to save photo via existing utility
     async def _save_photo_helper(self, message) -> str:
         from utils.photo_manager import save_photo_from_message
         return await save_photo_from_message(message)

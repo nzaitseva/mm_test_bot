@@ -1,24 +1,34 @@
+"""
+Сreation of a new test, handlers for steps:
+    `start_test_creation` -> state `TestCreation.waiting_for_title`
+    `process_title` -> state `TestCreation.waiting_for_content_type`
+    `process_content_type` -> state `TestCreation.waiting_for_text_content` or `TestCreation.waiting_for_photo`
+    `process_text_content`,`process_photo` -> state `TestCreation.waiting_for_question`
+    `process_question` -> state `TestCreation.waiting_for_options`
+    `process_options` -> state.clear()
+"""
+import logging
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
 
+from utils.emoji import Emoji as E
 from utils.database import Database
+from utils.config import load_config
 from keyboards.keyboards import get_cancel_keyboard, get_content_type_keyboard, get_admin_main_menu
 from states import TestCreation
-from utils.emoji import Emoji as E
+from filters.admin_filters import IsAdminFilter
 
-import logging
-
+config = load_config()
 logger = logging.getLogger(__name__)
-db = Database()
+
 
 router = Router()
+router.message.filter(IsAdminFilter(config.admin_ids))
+router.callback_query.filter(IsAdminFilter(config.admin_ids))
 
-
-@router.message(lambda msg: bool(msg.text) and msg.text.strip() == f"{E.CREATE} Создать тест")
+@router.message(F.text == f"{E.CREATE} Создать тест")
 async def start_test_creation(message: types.Message, state: FSMContext):
     logger.info(f"[start_test_creation] from={message.from_user.id}")
-    if not db.is_admin(message.from_user.id):
-        return
 
     await state.set_state(TestCreation.waiting_for_title)
     await message.answer("Введите название теста:", reply_markup=get_cancel_keyboard())
@@ -45,10 +55,15 @@ async def process_content_type(callback: types.CallbackQuery, state: FSMContext)
 
     if content_type in ("text", "both"):
         await state.set_state(TestCreation.waiting_for_text_content)
-        await callback.message.answer("Введите текстовое содержание теста:", reply_markup=get_cancel_keyboard())
+        await callback.message.answer(
+            "Введите текстовое содержание теста:",
+            reply_markup=get_cancel_keyboard()
+        )
     else:
         await state.set_state(TestCreation.waiting_for_photo)
-        await callback.message.answer("Отправьте картинку для теста:", reply_markup=get_cancel_keyboard())
+        await callback.message.answer(
+            "Отправьте картинку для теста:",
+            reply_markup=get_cancel_keyboard())
 
     await callback.answer()
 
@@ -86,7 +101,10 @@ async def process_photo(message: types.Message, state: FSMContext):
         elif getattr(message, "document", None) and getattr(message.document, "mime_type", "").startswith("image"):
             photo_file_id = message.document.file_id
         else:
-            await message.answer(f"{E.ERROR} Пожалуйста, отправьте изображение (как фото или файл).", reply_markup=get_cancel_keyboard())
+            await message.answer(
+                f"{E.ERROR} Пожалуйста, отправьте изображение (как фото или файл).",
+                reply_markup=get_cancel_keyboard()
+            )
             return
 
         try:
@@ -130,7 +148,7 @@ async def process_question(message: types.Message, state: FSMContext):
 
 
 @router.message(TestCreation.waiting_for_options)
-async def process_options(message: types.Message, state: FSMContext):
+async def process_options(message: types.Message, state: FSMContext, db: Database):
     logger.info(f"[process_options] from={message.from_user.id}")
     if message.text == f"{E.CANCEL} Отмена":
         await state.clear()
