@@ -37,7 +37,7 @@ async def main():
 		dp.include_router(admin_router)
 		dp.include_router(debug_router)
 
-		scheduler = SchedulerManager(bot)
+		scheduler = SchedulerManager(bot, db)
 		asyncio.create_task(scheduler.start_scheduler())
 
 		logger.info(f"{E.ROCKET} Bot started (2026)")

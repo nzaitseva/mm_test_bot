@@ -17,7 +17,7 @@ from keyboards.keyboards import get_tests_list_keyboard, get_cancel_keyboard, ge
 from states import ScheduleCreation
 from utils.database import Database
 from utils.emoji import Emoji as E
-from utils.callbacks import select_test_cb
+from utils.callbacks import SelectTestCB
 from utils.config import load_config
 from filters.admin_filters import IsAdminFilter
 
@@ -41,15 +41,37 @@ async def start_scheduling(message: types.Message, state: FSMContext, db: Databa
     await message.answer("Выберите тест для отправки:", reply_markup=get_tests_list_keyboard(tests))
 
 
-@router.callback_query(select_test_cb.filter())
+@router.message(F.text == f"{E.CANCEL} Отмена")
+async def cancel_scheduling(message: types.Message, state: FSMContext):
+    """Unified cancel handler for schedule creation states."""
+    st = await state.get_state()
+    # we explicitly check known scheduling states to avoid intercepting other flows
+    if st in (
+        ScheduleCreation.waiting_for_test_selection,
+        ScheduleCreation.waiting_for_channel,
+        ScheduleCreation.waiting_for_time,
+    ):
+        await state.clear()
+        await message.answer(f"{E.CANCEL} Планирование отменено", reply_markup=get_admin_main_menu())
+        return
+
+
+@router.callback_query(SelectTestCB.filter())
 async def process_test_selection(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
     logger.info(f"[process_test_selection] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        callback_data = select_test_cb.parse(callback.data or "")
+        # Разбираем callback через .unpack()
+        callback_data = SelectTestCB.unpack(callback.data or "")
 
-    try:
-        test_id = int(callback_data.get("test_id"))
-    except Exception:
+    # Support dict or typed model
+    if isinstance(callback_data, dict):
+        test_id = callback_data.get("test_id")
+    elif hasattr(callback_data, "model_dump"):
+        test_id = callback_data.model_dump().get("test_id")
+    else:
+        test_id = getattr(callback_data, "test_id", None)
+
+    if not isinstance(test_id, int):
         await callback.answer()
         return
 
@@ -62,10 +84,6 @@ async def process_test_selection(callback: types.CallbackQuery, state: FSMContex
 @router.message(ScheduleCreation.waiting_for_channel)
 async def process_channel(message: types.Message, state: FSMContext):
     logger.info(f"[process_channel] from={message.from_user.id} text={message.text!r}")
-    if message.text == f"{E.CANCEL} Отмена":
-        await state.clear()
-        await message.answer(f"{E.CANCEL} Планирование отменено", reply_markup=get_admin_main_menu())
-        return
 
     channel_id = Database.parse_channel_input(message.text)
     await state.update_data(channel_id=channel_id)
@@ -82,10 +100,6 @@ async def process_channel(message: types.Message, state: FSMContext):
 @router.message(ScheduleCreation.waiting_for_time)
 async def process_time(message: types.Message, state: FSMContext, db: Database):
     logger.info(f"[process_time] from={message.from_user.id} text={message.text!r}")
-    if message.text == f"{E.CANCEL} Отмена":
-        await state.clear()
-        await message.answer(f"{E.CANCEL} Планирование отменено", reply_markup=get_admin_main_menu())
-        return
     try:
         timezone_str = db.get_timezone()
         tz = pytz.timezone(timezone_str)

@@ -1,110 +1,80 @@
 """
-Robust CallbackData factories.
-
-This module tries to import CallbackData from common aiogram locations and
-verifies that it behaves like the usual aiogram factory. If that fails,
-a small fallback implementation is used which provides .new/.parse/.filter API.
+Simple typed CallbackData factories using aiogram's pydantic-based API.
+We intentionally drop fallback/aiogram v2 heuristics and require aiogram v3+ with
+`CallbackData` that supports typed fields via pydantic (automatic type casting).
 """
-from typing import Callable, Dict, Any
 import logging
-import importlib
+
+
+try:
+    from aiogram.utils.callback_data import CallbackData as _CB
+except Exception:
+    # Some aiogram installs expose CallbackData in `aiogram.filters.callback_data`
+    from aiogram.filters.callback_data import CallbackData as _CB
 
 logger = logging.getLogger(__name__)
 
-_CallbackFactory = None
+# Typed factories: `test_id` is typed as int so parsing will yield int values
+class SelectTestCB(_CB, prefix="select"):
+    test_id: int
 
-def _try_import_candidate(module_name: str, attr_name: str):
-    try:
-        mod = importlib.import_module(module_name)
-        attr = getattr(mod, attr_name, None)
-        return attr
-    except Exception:
-        return None
+class DeleteTestCB(_CB, prefix="delete"):
+    test_id: int
 
-candidates = [
-    ("aiogram.utils.callback_data", "CallbackData"),
-    ("aiogram.filters.callback_data", "CallbackData"),
-]
+class ViewTestCB(_CB, prefix="view"):
+    test_id: int
 
-for modname, attr in candidates:
-    Candidate = _try_import_candidate(modname, attr)
-    if Candidate is None:
-        continue
-    try:
-        test_factory = Candidate("testcb", "f1")
-        has_new = hasattr(test_factory, "new")
-        has_filter = hasattr(test_factory, "filter")
-        if has_new and has_filter:
-            _CallbackFactory = Candidate
-            logger.debug("Using CallbackData from %s.%s", modname, attr)
-            break
-        else:
-            logger.debug("Candidate CallbackData from %s.%s lacks expected API", modname, attr)
-            continue
-    except Exception as e:
-        logger.debug("Candidate CallbackData from %s.%s not usable: %s", modname, attr, e)
-        continue
+class StartEditCB(_CB, prefix="startedit"):
+    test_id: int
 
-if _CallbackFactory is None:
-    logger.info("Falling back to CallbackData fallback implementation")
+class SessionEditCB(_CB, prefix="session"):
+    test_id: int
+    field: str
 
-    class _CallbackDataFallback:
-        # Remembers the prefix (e.g. "select") and field names (e.g. "test_id")
-        def __init__(self, name: str, *parts: str):
-            self.name = name
-            self.parts = list(parts)
+class SessionDoneCB(_CB, prefix="sessiondone"):
+    test_id: int
 
-        # Assembles a string. E.g. `select_test_cb.new(test_id=5)`-> "select:test_id=5
-        def new(self, **kwargs) -> str:
-            pairs = []
-            for p in self.parts:
-                v = kwargs.get(p, "")
-                sval = str(v).replace("|", " ").replace("=", " ")
-                pairs.append(f"{p}={sval}")
-            return f"{self.name}:" + "|".join(pairs)
+class SessionCancelCB(_CB, prefix="sessioncancel"):
+    test_id: int
 
-        # parses the string back into a dictionary
-        def parse(self, callback_data: str) -> Dict[str, str]:
-            try:
-                if not callback_data.startswith(self.name + ":"):
-                    return {}
-                _, rest = callback_data.split(":", 1)
-                items = rest.split("|")
-                res = {}
-                for it in items:
-                    if "=" in it:
-                        k, v = it.split("=", 1)
-                        res[k] = v
-                return res
-            except Exception as e:
-                logger.exception("Failed to parse callback_data %r: %s", callback_data, e)
-                return {}
+class TestOptionCB(_CB, prefix="opt"):
+    test_id: int
+    option: str
 
-        # Simply checks whether a string starts with the required prefix (e.g., select:).
-        def filter(self) -> Callable:
-            def _pred(callback):
-                try:
-                    data = getattr(callback, "data", None)
-                    return isinstance(data, str) and data.startswith(self.name + ":")
-                except Exception:
-                    return False
-            return _pred
+class DetailBackCB(_CB, prefix="detailback"):
+    test_id: int
 
-    CallbackFactory = _CallbackDataFallback
-else:
-    CallbackFactory = _CallbackFactory
+class TimezoneCB(_CB, prefix="timezone"):
+    tz: str
 
-# factories used across project
-select_test_cb = CallbackFactory("select", "test_id")
-delete_test_cb = CallbackFactory("delete", "test_id")
-view_test_cb = CallbackFactory("view", "test_id")
-start_edit_cb = CallbackFactory("startedit", "test_id")
-session_edit_cb = CallbackFactory("session", "test_id", "field")
-session_done_cb = CallbackFactory("sessiondone", "test_id")
-session_cancel_cb = CallbackFactory("sessioncancel", "test_id")
-test_option_cb = CallbackFactory("opt", "test_id", "option")
-# new: detail/back factory
-detail_back_cb = CallbackFactory("detailback", "test_id")
+class DeleteScheduleCB(_CB, prefix="delschedule"):
+    schedule_id: int
 
-# expose name for compatibility
-CallbackData = CallbackFactory  # type: ignore
+class ConfirmDeleteScheduleCB(_CB, prefix="confirmdelschedule"):
+    schedule_id: int
+
+class CancelDeleteScheduleCB(_CB, prefix="canceldelschedule"):
+    schedule_id: int
+
+class ConfirmDeleteTestCB(_CB, prefix="confirmdeltest"):
+    test_id: int
+
+class CancelDeleteTestCB(_CB, prefix="canceldeltest"):
+    test_id: int
+
+class SettingsCB(_CB, prefix="settings"):
+    action: str
+
+# В aiogram v3 нативный подход — это использование классов-наследников CallbackData
+# (pydantic-моделей). Раньше проект использовал небольшой совместительный shim `_Factory`
+# с методами `.new()` / `.parse()` для минимальных правок. Теперь мы удаляем shim
+# и используем нативный API aiogram:
+#  - Создание callback_data: `TimezoneCB(tz="open").pack()`
+#  - Разбор callback_data: `inst = TimezoneCB.unpack(data); values = inst.model_dump()`
+#  - Фильтр для роутера: `TimezoneCB.filter()`
+#
+# Это делает код более явным и полностью совместимым с aiogram v3.
+
+# Экспортируем сами классы (см. объявления выше) и оставляем алиас CallbackData
+# для совместимости с aiogram/внешними инструментами.
+CallbackData = _CB  # type: ignore

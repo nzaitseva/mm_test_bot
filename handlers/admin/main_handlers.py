@@ -21,7 +21,8 @@ from utils.database import Database
 from utils.config import load_config
 from filters.admin_filters import IsAdminFilter
 from keyboards.keyboards import get_admin_main_menu, get_tests_view_keyboard, get_settings_keyboard, \
-    get_schedules_list_keyboard
+    get_schedules_list_keyboard, get_confirmation_keyboard
+from utils.callbacks import DeleteScheduleCB, ConfirmDeleteScheduleCB, CancelDeleteScheduleCB
 
 
 logger = logging.getLogger(__name__)
@@ -103,3 +104,75 @@ async def show_active_schedules(message: types.Message, db: Database):
         text + "Нажмите на расписание чтобы удалить его:",
         reply_markup=get_schedules_list_keyboard(schedules)
     )
+
+
+@router.callback_query(DeleteScheduleCB.filter())
+async def request_delete_schedule(callback: types.CallbackQuery, db: Database, callback_data: dict | None = None):
+    logger.info(f"[request_delete_schedule] user={callback.from_user.id} data={callback.data!r}")
+    if callback_data is None:
+        # Разбираем callback через .unpack()
+        callback_data = DeleteScheduleCB.unpack(callback.data or "")
+
+    # Support dict or typed model
+    if isinstance(callback_data, dict):
+        schedule_id = callback_data.get("schedule_id")
+    elif hasattr(callback_data, "model_dump"):
+        schedule_id = callback_data.model_dump().get("schedule_id")
+    else:
+        schedule_id = getattr(callback_data, "schedule_id", None)
+
+    if not isinstance(schedule_id, int):
+        await callback.answer()
+        return
+
+    # Edit current message to request confirmation
+    test_title = None
+    try:
+        rows = db._exec('SELECT t.title FROM schedule s JOIN tests t ON s.test_id = t.id WHERE s.id = ?', (int(schedule_id),), fetchone=True)
+        test_title = rows[0] if rows else None
+    except Exception:
+        test_title = None
+
+    text = f"{E.WARNING} Вы уверены, что хотите удалить расписание"
+    if test_title:
+        text += f" для теста: <b>{test_title}</b>"
+
+    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_confirmation_keyboard(action="delete_schedule", item_id=schedule_id))
+    await callback.answer()
+
+
+@router.callback_query(ConfirmDeleteScheduleCB.filter())
+async def confirm_delete_schedule(callback: types.CallbackQuery, db: Database, callback_data: dict | None = None):
+    logger.info(f"[confirm_delete_schedule] user={callback.from_user.id} data={callback.data!r}")
+    if callback_data is None:
+        # Разбираем callback через .unpack()
+        callback_data = ConfirmDeleteScheduleCB.unpack(callback.data or "")
+
+    # Support dict or typed model
+    if isinstance(callback_data, dict):
+        schedule_id = callback_data.get("schedule_id")
+    elif hasattr(callback_data, "model_dump"):
+        schedule_id = callback_data.model_dump().get("schedule_id")
+    else:
+        schedule_id = getattr(callback_data, "schedule_id", None)
+
+    if not isinstance(schedule_id, int):
+        await callback.answer()
+        return
+
+    success = db.delete_schedule(schedule_id)
+    if success:
+        await callback.message.edit_text(f"{E.CONFIRM} Расписание удалено.")
+    else:
+        await callback.message.edit_text(f"{E.ERROR} Ошибка при удалении расписания.")
+    await callback.answer()
+
+
+@router.callback_query(CancelDeleteScheduleCB.filter())
+async def cancel_delete_schedule(callback: types.CallbackQuery, callback_data: dict | None = None):
+    if callback_data is None:
+        # Разбираем callback через .unpack()
+        callback_data = CancelDeleteScheduleCB.unpack(callback.data or "")
+
+    await callback.message.edit_text(f"{E.CANCEL} Удаление отменено")
+    await callback.answer()

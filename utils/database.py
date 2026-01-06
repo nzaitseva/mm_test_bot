@@ -134,7 +134,10 @@ class Database:
     # Tests
     def add_test(self, title: str, content_type: str, text_content: Optional[str],
                  photo_file_id: Optional[str], photo_path: Optional[str], question_text: str, options: dict) -> int:
-        self._exec('''
+        # Use the same connection to get lastrowid reliably
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute('''
             INSERT INTO tests (title, content_type, text_content, photo_file_id, photo_path, question_text, options)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (
@@ -145,12 +148,9 @@ class Database:
             str(photo_path) if photo_path else None,
             str(question_text),
             json.dumps(options, ensure_ascii=False)
-        ), commit=True)
-        # lastrowid requires opening connection; fetch last inserted id
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        cursor.execute('SELECT last_insert_rowid()')
-        last_id = cursor.fetchone()[0]
+        ))
+        last_id = cursor.lastrowid
+        conn.commit()
         conn.close()
         return last_id
 
@@ -226,6 +226,14 @@ class Database:
             return True
         except Exception as e:
             logger.exception(f"Ошибка при удалении расписания: {e}")
+            return False
+
+    def mark_schedule_sent(self, schedule_id):
+        try:
+            self._exec('UPDATE schedule SET is_sent = 1 WHERE id = ?', (int(schedule_id),), commit=True)
+            return True
+        except Exception as e:
+            logger.exception(f"Ошибка при пометке расписания как отправленного: {e}")
             return False
 
     # Utility: static parser for channel input (moved as static method to be reusable)

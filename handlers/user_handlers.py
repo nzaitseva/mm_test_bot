@@ -11,7 +11,7 @@ from aiogram.types import FSInputFile
 
 from utils.database import Database
 from utils.emoji import Emoji as E
-from utils.callbacks import test_option_cb
+from utils.callbacks import TestOptionCB
 from keyboards.keyboards import get_test_options_keyboard
 
 
@@ -95,14 +95,24 @@ async def send_test_to_channel(test_id, channel_id, bot):
         return False
 
 
-@router.callback_query(test_option_cb.filter())
+@router.callback_query(TestOptionCB.filter())
 async def handle_test_answer(callback: types.CallbackQuery, callback_data: dict | None = None):
     if callback_data is None:
-        callback_data = test_option_cb.parse(callback.data or "")
+        # Разбираем callback через .unpack() — получаем pydantic-модель
+        callback_data = TestOptionCB.unpack(callback.data or "")
 
     try:
-        test_id = int(callback_data["test_id"])
-        option_text = callback_data["option"]
+        # Поддерживаем dict и pydantic-модель
+        if isinstance(callback_data, dict):
+            test_id = int(callback_data.get("test_id"))
+            option_text = callback_data.get("option")
+        elif hasattr(callback_data, "model_dump"):
+            d = callback_data.model_dump()
+            test_id = int(d.get("test_id"))
+            option_text = d.get("option")
+        else:
+            test_id = int(getattr(callback_data, "test_id", None))
+            option_text = getattr(callback_data, "option", None)
         logger.info(f"📨 Получен callback_data: test_id={test_id}, option={option_text!r}")
 
         test = db.get_test(test_id)

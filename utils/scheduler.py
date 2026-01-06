@@ -12,36 +12,25 @@ logger = logging.getLogger(__name__)
 
 
 class SchedulerManager:
-	def __init__(self, bot, db_path="tests.db"):
+	def __init__(self, bot, db: Database):
 		self.bot = bot
-		self.db_path = db_path
-		self.db = Database(db_path)
+		self.db = db
 
 	async def check_pending_schedules(self):
-		conn = sqlite3.connect(self.db_path)
-		cursor = conn.cursor()
-
 		# Получаем текущее время в UTC для сравнения
 		now_utc = datetime.now(pytz.utc)
 
-		cursor.execute(
-			'''SELECT s.id, s.test_id, s.channel_id, t.title 
-			   FROM schedule s 
-			   JOIN tests t ON s.test_id = t.id 
-			   WHERE s.is_sent = 0'''
-		)
-		all_schedules = cursor.fetchall()
+		all_schedules = self.db.get_active_schedules()
 
 		for schedule_id, test_id, channel_id, test_title in all_schedules:
 			# Получаем запланированное время из базы (оно хранится в UTC)
-			cursor.execute(
-				'SELECT scheduled_time FROM schedule WHERE id = ?',
-				(schedule_id,)
-			)
-			scheduled_time_str = cursor.fetchone()[0]
-
-			# Преобразуем строку в datetime объект (предполагаем, что хранится в UTC)
-			scheduled_time_utc = datetime.fromisoformat(scheduled_time_str).replace(tzinfo=pytz.utc)
+			# scheduled_time stored as ISO string in DB via Database.add_schedule
+			try:
+				scheduled_time_str = self._get_schedule_time(schedule_id)
+				scheduled_time_utc = datetime.fromisoformat(scheduled_time_str).replace(tzinfo=pytz.utc)
+			except Exception:
+				logger.exception("Failed to parse scheduled_time for schedule_id=%s", schedule_id)
+				continue
 
 			# Сравниваем с текущим временем в UTC
 			if now_utc >= scheduled_time_utc:
@@ -49,11 +38,7 @@ class SchedulerManager:
 					success = await send_test_to_channel(test_id, channel_id, self.bot)
 
 					if success:
-						cursor.execute(
-							'UPDATE schedule SET is_sent = 1 WHERE id = ?',
-							(schedule_id,)
-						)
-						conn.commit()
+						self.db.mark_schedule_sent(schedule_id)
 						logger.info(f"{E.CONFIRM} Тест '{test_title}' отправлен в {channel_id}")
 					else:
 						logger.info(f"{E.ERROR} Ошибка отправки теста '{test_title}' в {channel_id}")
@@ -61,7 +46,9 @@ class SchedulerManager:
 				except Exception as e:
 					logger.info(f"{E.ERROR} Ошибка отправки теста: {e}")
 
-		conn.close()
+	def _get_schedule_time(self, schedule_id):
+		rows = self.db._exec('SELECT scheduled_time FROM schedule WHERE id = ?', (int(schedule_id),), fetchone=True)
+		return rows[0] if rows else None
 
 	async def start_scheduler(self):
 		while True:

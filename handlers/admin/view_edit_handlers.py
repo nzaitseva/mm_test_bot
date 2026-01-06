@@ -36,13 +36,15 @@ from utils.database import Database
 from utils.emoji import Emoji as E
 from utils.photo_manager import save_photo_from_message
 from utils.callbacks import (
-    view_test_cb,
-    start_edit_cb,
-    session_edit_cb,
-    session_done_cb,
-    session_cancel_cb,
-    detail_back_cb,
+    ViewTestCB,
+    StartEditCB,
+    SessionEditCB,
+    SessionDoneCB,
+    SessionCancelCB,
+    DetailBackCB,
 )
+# NOTE (RU): заменил legacy-сущности `.new()`/`.parse()` на нативные aiogram классы.
+# Используйте `ViewTestCB.unpack(data)` и `ViewTestCB.filter()`.
 from utils.config import load_config
 from filters.admin_filters import IsAdminFilter
 
@@ -54,22 +56,29 @@ router.message.filter(IsAdminFilter(config.admin_ids))
 router.callback_query.filter(IsAdminFilter(config.admin_ids))
 
 
-@router.callback_query(view_test_cb.filter())
+@router.callback_query(ViewTestCB.filter())
 async def view_test_detail(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
     """
-    Show full details for a test. Uses callback factory view_test_cb.
+    Show full details for a test. Uses native CallbackData class `ViewTestCB`.
     """
     logger.info(f"[view_test_detail] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        callback_data = view_test_cb.parse(callback.data or "")
+        # Разбираем callback через .unpack() — получаем инстанс pydantic-модели
+        callback_data = ViewTestCB.unpack(callback.data or "")
 
     if not db.is_admin(callback.from_user.id):
         await callback.answer()
         return
 
-    try:
-        test_id = int(callback_data.get("test_id"))
-    except Exception:
+    # Support dict or typed model
+    if isinstance(callback_data, dict):
+        test_id = callback_data.get("test_id")
+    elif hasattr(callback_data, "model_dump"):
+        test_id = callback_data.model_dump().get("test_id")
+    else:
+        test_id = getattr(callback_data, "test_id", None)
+
+    if not isinstance(test_id, int):
         await callback.answer()
         return
 
@@ -113,7 +122,7 @@ async def view_test_detail(callback: types.CallbackQuery, state: FSMContext, db:
     await callback.answer()
 
 
-@router.callback_query(detail_back_cb.filter())
+@router.callback_query(DetailBackCB.filter())
 async def detail_back(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
     """
     Handler for the "Back" button created via detail_back_cb factory.
@@ -122,7 +131,8 @@ async def detail_back(callback: types.CallbackQuery, state: FSMContext, db: Data
     """
     logger.info(f"[detail_back] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        callback_data = detail_back_cb.parse(callback.data or "")
+        # Разбираем callback через .unpack()
+        callback_data = DetailBackCB.unpack(callback.data or "")
 
     if not db.is_admin(callback.from_user.id):
         await callback.answer()
@@ -144,49 +154,29 @@ async def detail_back(callback: types.CallbackQuery, state: FSMContext, db: Data
         pass
 
 
-@router.callback_query(lambda c: bool(c.data) and c.data.startswith("detail_back_"))
-async def detail_back_legacy(callback: types.CallbackQuery, state: FSMContext, db: Database):
-    logger.info(f"[detail_back_legacy] user={callback.from_user.id} data={callback.data!r}")
-    # parse id from legacy string
-    try:
-        tid = callback.data.replace("detail_back_", "")
-        test_id = int(tid)
-    except Exception:
-        await callback.answer()
-        return
-
-    if not db.is_admin(callback.from_user.id):
-        await callback.answer()
-        return
-
-    tests = db.get_all_tests()
-    if not tests:
-        await callback.message.answer("У вас нет тестов")
-        await callback.answer()
-        return
-
-    # Show tests list (same as modern handler)
-    await callback.message.answer("Выберите тест для просмотра:", reply_markup=get_tests_view_keyboard(tests))
-    await callback.answer()
-    try:
-        await callback.message.delete()
-    except Exception:
-        pass
 
 
-@router.callback_query(start_edit_cb.filter())
+
+@router.callback_query(StartEditCB.filter())
 async def start_edit_session(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
     logger.info(f"[start_edit_session] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        callback_data = start_edit_cb.parse(callback.data or "")
+        # Разбираем callback через .unpack()
+        callback_data = StartEditCB.unpack(callback.data or "")
 
     if not db.is_admin(callback.from_user.id):
         await callback.answer()
         return
 
-    try:
-        test_id = int(callback_data.get("test_id"))
-    except Exception:
+    # Support dict or typed model
+    if isinstance(callback_data, dict):
+        test_id = callback_data.get("test_id")
+    elif hasattr(callback_data, "model_dump"):
+        test_id = callback_data.model_dump().get("test_id")
+    else:
+        test_id = getattr(callback_data, "test_id", None)
+
+    if not isinstance(test_id, int):
         await callback.answer()
         return
 
@@ -202,20 +192,30 @@ async def start_edit_session(callback: types.CallbackQuery, state: FSMContext, d
     await callback.answer()
 
 
-@router.callback_query(session_edit_cb.filter())
+@router.callback_query(SessionEditCB.filter())
 async def session_choose_field(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
     logger.info(f"[session_choose_field] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        callback_data = session_edit_cb.parse(callback.data or "")
+        # Разбираем callback через .unpack()
+        callback_data = SessionEditCB.unpack(callback.data or "")
 
     if not db.is_admin(callback.from_user.id):
         await callback.answer()
         return
 
-    try:
-        test_id = int(callback_data.get("test_id"))
+    # Support dict or typed model
+    if isinstance(callback_data, dict):
+        test_id = callback_data.get("test_id")
         field = callback_data.get("field")
-    except Exception:
+    elif hasattr(callback_data, "model_dump"):
+        data = callback_data.model_dump()
+        test_id = data.get("test_id")
+        field = data.get("field")
+    else:
+        test_id = getattr(callback_data, "test_id", None)
+        field = getattr(callback_data, "field", None)
+
+    if not isinstance(test_id, int) or not isinstance(field, str):
         await callback.answer()
         return
 
@@ -400,11 +400,12 @@ async def session_receive_document_image(message: types.Message, state: FSMConte
     await state.set_state(EditSession.choosing_field)
 
 
-@router.callback_query(session_done_cb.filter())
+@router.callback_query(SessionDoneCB.filter())
 async def session_done(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
     logger.info(f"[session_done] user={callback.from_user.id}")
     if callback_data is None:
-        callback_data = session_done_cb.parse(callback.data or "")
+        # Разбираем callback через .unpack()
+        callback_data = SessionDoneCB.unpack(callback.data or "")
 
     if not db.is_admin(callback.from_user.id):
         await callback.answer()
@@ -418,11 +419,12 @@ async def session_done(callback: types.CallbackQuery, state: FSMContext, db: Dat
     await callback.answer()
 
 
-@router.callback_query(session_cancel_cb.filter())
+@router.callback_query(SessionCancelCB.filter())
 async def session_cancel(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
     logger.info(f"[session_cancel] user={callback.from_user.id}")
     if callback_data is None:
-        callback_data = session_cancel_cb.parse(callback.data or "")
+        # Разбираем callback через .unpack()
+        callback_data = SessionCancelCB.unpack(callback.data or "")
 
     if not db.is_admin(callback.from_user.id):
         await callback.answer()
