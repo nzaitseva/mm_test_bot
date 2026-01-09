@@ -42,8 +42,6 @@ async def main():
 
 		logger.info(f"{E.ROCKET} Bot started (2026)")
 
-		# Pass `db` to start_polling
-		# Now db is available in all handlers as argument `db: Database`
 		await dp.start_polling(bot, db=db)
 
 	except Exception as e:

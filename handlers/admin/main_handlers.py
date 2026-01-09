@@ -19,19 +19,19 @@ from aiogram.fsm.context import FSMContext
 from utils.emoji import Emoji as E
 from utils.database import Database
 from utils.config import load_config
+from utils.callbacks import DeleteScheduleCB, ConfirmDeleteScheduleCB, CancelDeleteScheduleCB, \
+    get_callback_value,get_int_callback_value
 from filters.admin_filters import IsAdminFilter
 from keyboards.keyboards import get_admin_main_menu, get_tests_view_keyboard, get_settings_keyboard, \
     get_schedules_list_keyboard, get_confirmation_keyboard
-from utils.callbacks import DeleteScheduleCB, ConfirmDeleteScheduleCB, CancelDeleteScheduleCB
 
 
 logger = logging.getLogger(__name__)
 config = load_config()
 
 
-# Add filter to the router
-# So that ALL handlers in this file are available only to admins
 router = Router()
+# ALL handlers in this file are available only to admins
 router.message.filter(IsAdminFilter(config.admin_ids))
 router.callback_query.filter(IsAdminFilter(config.admin_ids))
 
@@ -71,7 +71,7 @@ async def show_settings(message: types.Message, db: Database):
     timezone = db.get_timezone()
     text = (
         f"{E.SETTINGS} <b>Настройки бота</b>\n\n"
-        f"📍 <b>Текущий часовой пояс:</b> {timezone}\n\n"
+        f"{E.STAPLE} <b>Текущий часовой пояс:</b> {timezone}\n\n"
         "Выберите настройку для изменения:"
     )
     await message.answer(text, parse_mode="HTML", reply_markup=get_settings_keyboard())
@@ -110,18 +110,10 @@ async def show_active_schedules(message: types.Message, db: Database):
 async def request_delete_schedule(callback: types.CallbackQuery, db: Database, callback_data: dict | None = None):
     logger.info(f"[request_delete_schedule] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        # Разбираем callback через .unpack()
         callback_data = DeleteScheduleCB.unpack(callback.data or "")
 
-    # Support dict or typed model
-    if isinstance(callback_data, dict):
-        schedule_id = callback_data.get("schedule_id")
-    elif hasattr(callback_data, "model_dump"):
-        schedule_id = callback_data.model_dump().get("schedule_id")
-    else:
-        schedule_id = getattr(callback_data, "schedule_id", None)
-
-    if not isinstance(schedule_id, int):
+    schedule_id = get_int_callback_value(callback_data, "schedule_id")
+    if schedule_id is None:
         await callback.answer()
         return
 
@@ -145,18 +137,10 @@ async def request_delete_schedule(callback: types.CallbackQuery, db: Database, c
 async def confirm_delete_schedule(callback: types.CallbackQuery, db: Database, callback_data: dict | None = None):
     logger.info(f"[confirm_delete_schedule] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        # Разбираем callback через .unpack()
         callback_data = ConfirmDeleteScheduleCB.unpack(callback.data or "")
 
-    # Support dict or typed model
-    if isinstance(callback_data, dict):
-        schedule_id = callback_data.get("schedule_id")
-    elif hasattr(callback_data, "model_dump"):
-        schedule_id = callback_data.model_dump().get("schedule_id")
-    else:
-        schedule_id = getattr(callback_data, "schedule_id", None)
-
-    if not isinstance(schedule_id, int):
+    schedule_id = get_int_callback_value(callback_data, "schedule_id")
+    if schedule_id is None:
         await callback.answer()
         return
 
@@ -171,7 +155,6 @@ async def confirm_delete_schedule(callback: types.CallbackQuery, db: Database, c
 @router.callback_query(CancelDeleteScheduleCB.filter())
 async def cancel_delete_schedule(callback: types.CallbackQuery, callback_data: dict | None = None):
     if callback_data is None:
-        # Разбираем callback через .unpack()
         callback_data = CancelDeleteScheduleCB.unpack(callback.data or "")
 
     await callback.message.edit_text(f"{E.CANCEL} Удаление отменено")

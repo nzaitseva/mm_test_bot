@@ -35,16 +35,9 @@ from states import EditSession
 from utils.database import Database
 from utils.emoji import Emoji as E
 from utils.photo_manager import save_photo_from_message
-from utils.callbacks import (
-    ViewTestCB,
-    StartEditCB,
-    SessionEditCB,
-    SessionDoneCB,
-    SessionCancelCB,
-    DetailBackCB,
-)
-# NOTE (RU): заменил legacy-сущности `.new()`/`.parse()` на нативные aiogram классы.
-# Используйте `ViewTestCB.unpack(data)` и `ViewTestCB.filter()`.
+from utils.callbacks import ViewTestCB, StartEditCB, SessionEditCB, SessionDoneCB, \
+    SessionCancelCB, DetailBackCB, get_callback_value, get_int_callback_value
+
 from utils.config import load_config
 from filters.admin_filters import IsAdminFilter
 
@@ -58,27 +51,13 @@ router.callback_query.filter(IsAdminFilter(config.admin_ids))
 
 @router.callback_query(ViewTestCB.filter())
 async def view_test_detail(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
-    """
-    Show full details for a test. Uses native CallbackData class `ViewTestCB`.
-    """
     logger.info(f"[view_test_detail] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        # Разбираем callback через .unpack() — получаем инстанс pydantic-модели
         callback_data = ViewTestCB.unpack(callback.data or "")
 
-    if not db.is_admin(callback.from_user.id):
-        await callback.answer()
-        return
-
-    # Support dict or typed model
-    if isinstance(callback_data, dict):
-        test_id = callback_data.get("test_id")
-    elif hasattr(callback_data, "model_dump"):
-        test_id = callback_data.model_dump().get("test_id")
-    else:
-        test_id = getattr(callback_data, "test_id", None)
-
-    if not isinstance(test_id, int):
+    # Получаем test_id через helper
+    test_id = get_int_callback_value(callback_data, "test_id")
+    if test_id is None:
         await callback.answer()
         return
 
@@ -92,7 +71,7 @@ async def view_test_detail(callback: types.CallbackQuery, state: FSMContext, db:
     except Exception:
         options = {}
 
-    lines = [f"📝 <b>{test[1]}</b> (ID: {test[0]})"]
+    lines = [f"{E.TEXT} <b>{test[1]}</b> (ID: {test[0]})"]
     if test[3]:
         lines.append(f"\nТекст:\n{test[3]}")
     if test[6]:
@@ -116,7 +95,6 @@ async def view_test_detail(callback: types.CallbackQuery, state: FSMContext, db:
             await callback.message.answer(details_text, parse_mode="HTML", reply_markup=get_test_detail_keyboard(test_id))
     except Exception:
         logger.exception("Error while sending test detail")
-        # fallback to plain text
         await callback.message.answer(details_text, parse_mode="HTML", reply_markup=get_test_detail_keyboard(test_id))
 
     await callback.answer()
@@ -124,19 +102,9 @@ async def view_test_detail(callback: types.CallbackQuery, state: FSMContext, db:
 
 @router.callback_query(DetailBackCB.filter())
 async def detail_back(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
-    """
-    Handler for the "Back" button created via detail_back_cb factory.
-    Shows the tests list and attempts to delete the previous message (if possible).
-    Compatible with real aiogram CallbackData injection and with fallback.
-    """
     logger.info(f"[detail_back] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        # Разбираем callback через .unpack()
         callback_data = DetailBackCB.unpack(callback.data or "")
-
-    if not db.is_admin(callback.from_user.id):
-        await callback.answer()
-        return
 
     tests = db.get_all_tests()
     if not tests:
@@ -150,11 +118,7 @@ async def detail_back(callback: types.CallbackQuery, state: FSMContext, db: Data
         # attempt to delete the detailed message to avoid duplicates
         await callback.message.delete()
     except Exception:
-        # ignore deletion errors (e.g., insufficient rights)
         pass
-
-
-
 
 
 @router.callback_query(StartEditCB.filter())
@@ -164,19 +128,8 @@ async def start_edit_session(callback: types.CallbackQuery, state: FSMContext, d
         # Разбираем callback через .unpack()
         callback_data = StartEditCB.unpack(callback.data or "")
 
-    if not db.is_admin(callback.from_user.id):
-        await callback.answer()
-        return
-
-    # Support dict or typed model
-    if isinstance(callback_data, dict):
-        test_id = callback_data.get("test_id")
-    elif hasattr(callback_data, "model_dump"):
-        test_id = callback_data.model_dump().get("test_id")
-    else:
-        test_id = getattr(callback_data, "test_id", None)
-
-    if not isinstance(test_id, int):
+    test_id = get_int_callback_value(callback_data, "test_id")
+    if test_id is None:
         await callback.answer()
         return
 
@@ -196,12 +149,7 @@ async def start_edit_session(callback: types.CallbackQuery, state: FSMContext, d
 async def session_choose_field(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
     logger.info(f"[session_choose_field] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        # Разбираем callback через .unpack()
         callback_data = SessionEditCB.unpack(callback.data or "")
-
-    if not db.is_admin(callback.from_user.id):
-        await callback.answer()
-        return
 
     # Support dict or typed model
     if isinstance(callback_data, dict):
@@ -244,7 +192,9 @@ async def session_receive_value(message: types.Message, state: FSMContext, db: D
 
     # Robust cancel detection: match "⚠️ Отмена" (E.CANCEL + 'Отмена') OR plain "Отмена" (case-insensitive)
     text = (message.text or "").strip()
+
     cancel_variants = {f"{E.CANCEL} Отмена".lower(), "отмена"}
+
     if text.lower() in cancel_variants:
         # If user cancels editing this field, return to choosing_field (do NOT clear whole session)
         data = await state.get_data()
@@ -423,12 +373,8 @@ async def session_done(callback: types.CallbackQuery, state: FSMContext, db: Dat
 async def session_cancel(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
     logger.info(f"[session_cancel] user={callback.from_user.id}")
     if callback_data is None:
-        # Разбираем callback через .unpack()
         callback_data = SessionCancelCB.unpack(callback.data or "")
 
-    if not db.is_admin(callback.from_user.id):
-        await callback.answer()
-        return
     await state.clear()
     try:
         await callback.message.answer(" ", reply_markup=ReplyKeyboardRemove())

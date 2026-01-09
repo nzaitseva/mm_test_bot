@@ -1,16 +1,6 @@
-"""
-Simple typed CallbackData factories using aiogram's pydantic-based API.
-We intentionally drop fallback/aiogram v2 heuristics and require aiogram v3+ with
-`CallbackData` that supports typed fields via pydantic (automatic type casting).
-"""
 import logging
 
-
-try:
-    from aiogram.utils.callback_data import CallbackData as _CB
-except Exception:
-    # Some aiogram installs expose CallbackData in `aiogram.filters.callback_data`
-    from aiogram.filters.callback_data import CallbackData as _CB
+from aiogram.filters.callback_data import CallbackData as _CB
 
 logger = logging.getLogger(__name__)
 
@@ -65,16 +55,35 @@ class CancelDeleteTestCB(_CB, prefix="canceldeltest"):
 class SettingsCB(_CB, prefix="settings"):
     action: str
 
-# В aiogram v3 нативный подход — это использование классов-наследников CallbackData
-# (pydantic-моделей). Раньше проект использовал небольшой совместительный shim `_Factory`
-# с методами `.new()` / `.parse()` для минимальных правок. Теперь мы удаляем shim
-# и используем нативный API aiogram:
-#  - Создание callback_data: `TimezoneCB(tz="open").pack()`
-#  - Разбор callback_data: `inst = TimezoneCB.unpack(data); values = inst.model_dump()`
-#  - Фильтр для роутера: `TimezoneCB.filter()`
-#
-# Это делает код более явным и полностью совместимым с aiogram v3.
 
-# Экспортируем сами классы (см. объявления выше) и оставляем алиас CallbackData
-# для совместимости с aiogram/внешними инструментами.
+# Export the classes themselves and leave the CallbackData alias
+# for compatibility with aiogram/external tools.
 CallbackData = _CB  # type: ignore
+
+def get_callback_value(callback_data, key: str):
+    """Return the value for `key` from callback_data supporting multiple formats.
+
+    Supports:
+      - dict (old .parse() code style)
+      - pydantic-model (aiogram CallbackData instances) — `.model_dump()`
+      - object with attribute (getattr)
+
+    """
+    if callback_data is None:
+        return None
+    if isinstance(callback_data, dict):
+        return callback_data.get(key)
+    if hasattr(callback_data, "model_dump"):
+        try:
+            return callback_data.model_dump().get(key)
+        except Exception:
+            return None
+    return getattr(callback_data, key, None)
+
+
+def get_int_callback_value(callback_data, key: str):
+    val = get_callback_value(callback_data, key)
+    try:
+        return int(val) if val is not None else None
+    except Exception:
+        return None

@@ -1,4 +1,3 @@
-# handlers/settings_handlers.py
 import pytz
 import logging
 
@@ -7,12 +6,9 @@ from aiogram import Router, F, types
 from utils.emoji import Emoji as E
 from utils.database import Database
 from utils.config import load_config
+from utils.callbacks import TimezoneCB, SettingsCB, get_callback_value
 from filters.admin_filters import IsAdminFilter
 from keyboards.keyboards import get_settings_keyboard, get_timezone_keyboard, get_admin_main_menu
-from utils.callbacks import TimezoneCB, SettingsCB
-
-# NOTE (RU): раньше использовался `.new()`/`.parse()` shim; теперь используем нативный
-# aiogram v3 подход: `TimezoneCB(...).pack()` и `TimezoneCB.unpack(data)`
 
 
 logger = logging.getLogger(__name__)
@@ -38,24 +34,13 @@ async def show_settings(message: types.Message, db: Database):
 
 
 @router.callback_query(TimezoneCB.filter(F.tz == "open"))
-# NOTE (RU): используем нативный `unpack` для разбора callback-data, когда aiogram
-# не инжектит объект автоматически. Этот обработчик отвечает только за открытие
-# списка часовых поясов (tz == "open").
+# Handles only opening of timezone lists (tz == "open").
 async def show_timezone_settings(callback: types.CallbackQuery, db: Database, callback_data: dict | None = None):
     if callback_data is None:
-        # Разбираем данные через native `unpack` (вернет инстанс CallbackData)
         callback_data = TimezoneCB.unpack(callback.data or "")
 
-    # support both dict (from .parse()) and typed model injected by aiogram
-    if isinstance(callback_data, dict):
-        tz_val = callback_data.get("tz")
-    elif hasattr(callback_data, "model_dump"):
-        tz_val = callback_data.model_dump().get("tz")
-    else:
-        tz_val = getattr(callback_data, "tz", None)
-
+    tz_val = get_callback_value(callback_data, "tz")
     if tz_val == "open":
-
         current_timezone = db.get_timezone()
         await callback.message.edit_text(
             f"{E.CLOCK} <b>Настройка часового пояса</b>\n\n"
@@ -73,16 +58,9 @@ async def show_timezone_settings(callback: types.CallbackQuery, db: Database, ca
 @router.callback_query(TimezoneCB.filter(F.tz != "open"))
 async def set_timezone(callback: types.CallbackQuery, db: Database, callback_data: dict | None = None):
     if callback_data is None:
-        # Разбираем данные через native `unpack` (вернет инстанс CallbackData)
         callback_data = TimezoneCB.unpack(callback.data or "")
 
-    # support both dict and typed model
-    if isinstance(callback_data, dict):
-        tz = callback_data.get("tz")
-    elif hasattr(callback_data, "model_dump"):
-        tz = callback_data.model_dump().get("tz")
-    else:
-        tz = getattr(callback_data, "tz", None)
+    tz = get_callback_value(callback_data, "tz")
 
     if tz == "back":
 
@@ -113,29 +91,23 @@ async def set_timezone(callback: types.CallbackQuery, db: Database, callback_dat
 
 
 @router.callback_query(SettingsCB.filter())
-# NOTE (RU): раньше использовался legacy callback 'settings_back'; теперь используем
-# нативный класс SettingsCB с action='back'.
-# Важно: `edit_text` не принимает `ReplyKeyboardMarkup` (ожидается InlineKeyboardMarkup).
-# Поэтому мы редактируем текст сообщения (без reply_markup), а затем отправляем новое
-# сообщение с `get_admin_main_menu()` (reply-клавиатурой).
+# SettingsCB with action='back'.
+# `edit_text` doesn't accept `ReplyKeyboardMarkup` (InlineKeyboardMarkup is expected).
+# So we edit the message text (without reply_markup) and then send a new message
+# with `get_admin_main_menu()` (the reply keyboard).
 async def settings_back(callback: types.CallbackQuery, callback_data: dict | None = None):
     if callback_data is None:
-        # Разбираем callback (если aiogram не инжектил модель)
         callback_data = SettingsCB.unpack(callback.data or "")
 
-    # Попытаемся удалить исходное сообщение, чтобы не оставлять его в чате.
+    # Try to delete the original message from chat
     try:
         await callback.message.delete()
     except Exception:
-        # Если удаление невозможно (например, недостаточно прав), попробуем просто
-        # отредактировать сообщение и убрать inline-кнопки.
         try:
             await callback.message.edit_text(f"{E.HAND} Возврат в главное меню", reply_markup=None)
         except Exception:
-            # silent fallback — ничего не делаем
             pass
 
-    # Отправляем новое сообщение с reply-клавиатурой (главное меню)
     await callback.message.answer("Главное меню:", reply_markup=get_admin_main_menu())
 
     await callback.answer()

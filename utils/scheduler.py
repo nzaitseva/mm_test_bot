@@ -17,13 +17,12 @@ class SchedulerManager:
 		self.db = db
 
 	async def check_pending_schedules(self):
-		# Получаем текущее время в UTC для сравнения
 		now_utc = datetime.now(pytz.utc)
 
 		all_schedules = self.db.get_active_schedules()
 
 		for schedule_id, test_id, channel_id, test_title in all_schedules:
-			# Получаем запланированное время из базы (оно хранится в UTC)
+			# Get time from db in UTC
 			# scheduled_time stored as ISO string in DB via Database.add_schedule
 			try:
 				scheduled_time_str = self._get_schedule_time(schedule_id)
@@ -32,10 +31,9 @@ class SchedulerManager:
 				logger.exception("Failed to parse scheduled_time for schedule_id=%s", schedule_id)
 				continue
 
-			# Сравниваем с текущим временем в UTC
 			if now_utc >= scheduled_time_utc:
 				try:
-					success = await send_test_to_channel(test_id, channel_id, self.bot)
+					success = await send_test_to_channel(test_id, channel_id, self.bot, self.db)
 
 					if success:
 						self.db.mark_schedule_sent(schedule_id)

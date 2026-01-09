@@ -1,12 +1,3 @@
-"""
-Сreation of a new test, handlers for steps:
-    `start_test_creation` -> state `TestCreation.waiting_for_title`
-    `process_title` -> state `TestCreation.waiting_for_content_type`
-    `process_content_type` -> state `TestCreation.waiting_for_text_content` or `TestCreation.waiting_for_photo`
-    `process_text_content`,`process_photo` -> state `TestCreation.waiting_for_question`
-    `process_question` -> state `TestCreation.waiting_for_options`
-    `process_options` -> state.clear()
-"""
 import logging
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext

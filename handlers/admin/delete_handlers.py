@@ -10,7 +10,8 @@ from keyboards.keyboards import get_tests_list_keyboard, get_confirmation_keyboa
 from states import TestDeletion
 from utils.database import Database
 from utils.emoji import Emoji as E
-from utils.callbacks import DeleteTestCB, ConfirmDeleteTestCB, CancelDeleteTestCB
+from utils.callbacks import DeleteTestCB, ConfirmDeleteTestCB, CancelDeleteTestCB, \
+    get_callback_value,get_int_callback_value
 from utils.config import load_config
 from filters.admin_filters import IsAdminFilter
 
@@ -39,19 +40,10 @@ async def start_test_deletion(message: types.Message, state: FSMContext, db: Dat
 async def process_test_selection_for_deletion(callback: types.CallbackQuery, db: Database, callback_data: dict | None = None):
     logger.info(f"[process_test_selection_for_deletion] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        # Разбираем callback через .unpack() — получаем pydantic-модель
         callback_data = DeleteTestCB.unpack(callback.data or "")
 
-    # callback_data may be a dict from our .parse() wrapper or a typed
-    # pydantic model injected by aiogram's parameter handling. Support both.
-    if isinstance(callback_data, dict):
-        test_id = callback_data.get("test_id")
-    elif hasattr(callback_data, "model_dump"):
-        test_id = callback_data.model_dump().get("test_id")
-    else:
-        test_id = getattr(callback_data, "test_id", None)
-
-    if not isinstance(test_id, int):
+    test_id = get_int_callback_value(callback_data, "test_id")
+    if test_id is None:
         await callback.answer()
         return
 
@@ -61,7 +53,6 @@ async def process_test_selection_for_deletion(callback: types.CallbackQuery, db:
 
     test = db.get_test(test_id)
     test_title = test[1] if test else "Неизвестный тест"
-    # Ask for confirmation (typed callback includes test_id)
     await callback.message.answer(
         f"{E.WARNING}️ Вы уверены, что хотите удалить тест:\n\n<b>{test_title}</b>\n\nЭто действие нельзя отменить!",
         parse_mode="HTML",
@@ -74,18 +65,10 @@ async def process_test_selection_for_deletion(callback: types.CallbackQuery, db:
 async def confirm_test_deletion(callback: types.CallbackQuery, db: Database, callback_data: dict | None = None):
     logger.info(f"[confirm_test_deletion] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        # Разбираем callback через .unpack() — получаем pydantic-модель
         callback_data = ConfirmDeleteTestCB.unpack(callback.data or "")
 
-    # Support dict or typed model
-    if isinstance(callback_data, dict):
-        test_id = callback_data.get("test_id")
-    elif hasattr(callback_data, "model_dump"):
-        test_id = callback_data.model_dump().get("test_id")
-    else:
-        test_id = getattr(callback_data, "test_id", None)
-
-    if not isinstance(test_id, int):
+    test_id = get_int_callback_value(callback_data, "test_id")
+    if test_id is None:
         await callback.answer()
         return
 
@@ -104,7 +87,6 @@ async def confirm_test_deletion(callback: types.CallbackQuery, db: Database, cal
 @router.callback_query(CancelDeleteTestCB.filter())
 async def cancel_test_deletion(callback: types.CallbackQuery, callback_data: dict | None = None):
     if callback_data is None:
-        # Разбираем callback через .unpack() — получаем pydantic-модель
         callback_data = CancelDeleteTestCB.unpack(callback.data or "")
 
     await callback.message.edit_text(f"{E.CANCEL} Удаление отменено")

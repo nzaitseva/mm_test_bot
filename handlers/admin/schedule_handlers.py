@@ -1,11 +1,3 @@
-"""
-Handlers for scheduling tests for posting to channel.
-Main functions:
-    - `start_scheduling` -> state `ScheduleCreation.waiting_for_test_selection`
-    - `process_test_selection` -> state `ScheduleCreation.waiting_for_channel`
-    - `process_channel` -> state `ScheduleCreation.waiting_for_time`
-    - `process_time` -> finish and go to main admin panel
-"""
 import pytz
 import logging
 from datetime import datetime
@@ -17,7 +9,7 @@ from keyboards.keyboards import get_tests_list_keyboard, get_cancel_keyboard, ge
 from states import ScheduleCreation
 from utils.database import Database
 from utils.emoji import Emoji as E
-from utils.callbacks import SelectTestCB
+from utils.callbacks import SelectTestCB, get_int_callback_value
 from utils.config import load_config
 from filters.admin_filters import IsAdminFilter
 
@@ -60,24 +52,19 @@ async def cancel_scheduling(message: types.Message, state: FSMContext):
 async def process_test_selection(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
     logger.info(f"[process_test_selection] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        # Разбираем callback через .unpack()
         callback_data = SelectTestCB.unpack(callback.data or "")
 
-    # Support dict or typed model
-    if isinstance(callback_data, dict):
-        test_id = callback_data.get("test_id")
-    elif hasattr(callback_data, "model_dump"):
-        test_id = callback_data.model_dump().get("test_id")
-    else:
-        test_id = getattr(callback_data, "test_id", None)
-
-    if not isinstance(test_id, int):
+    test_id = get_int_callback_value(callback_data, "test_id")
+    if test_id is None:
         await callback.answer()
         return
 
     await state.update_data(test_id=test_id)
     await state.set_state(ScheduleCreation.waiting_for_channel)
-    await callback.message.answer("Введите ID или @username канала (например: @my_channel или -1001234567890):", reply_markup=get_cancel_keyboard())
+    await callback.message.answer(
+        "Введите ID или @username канала (например: @my_channel или -1001234567890):",
+        reply_markup=get_cancel_keyboard()
+    )
     await callback.answer()
 
 

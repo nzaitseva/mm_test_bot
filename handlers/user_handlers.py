@@ -6,22 +6,20 @@ import json
 import logging
 
 from aiogram import Router, F, types
-from aiogram.filters import Command
 from aiogram.types import FSInputFile
 
 from utils.database import Database
 from utils.emoji import Emoji as E
-from utils.callbacks import TestOptionCB
+from utils.callbacks import TestOptionCB, get_callback_value
 from keyboards.keyboards import get_test_options_keyboard
 
 
 logger = logging.getLogger(__name__)
 
 router = Router()
-db = Database()
 
 
-async def send_test_to_channel(test_id, channel_id, bot):
+async def send_test_to_channel(test_id, channel_id, bot, db: Database):
     test = db.get_test(test_id)
     if not test:
         logger.error(f"{E.ERROR} Тест {test_id} не найден для отправки в канал {channel_id}")
@@ -96,23 +94,17 @@ async def send_test_to_channel(test_id, channel_id, bot):
 
 
 @router.callback_query(TestOptionCB.filter())
-async def handle_test_answer(callback: types.CallbackQuery, callback_data: dict | None = None):
+async def handle_test_answer(callback: types.CallbackQuery, db: Database, callback_data: dict | None = None):
     if callback_data is None:
-        # Разбираем callback через .unpack() — получаем pydantic-модель
         callback_data = TestOptionCB.unpack(callback.data or "")
 
     try:
-        # Поддерживаем dict и pydantic-модель
-        if isinstance(callback_data, dict):
-            test_id = int(callback_data.get("test_id"))
-            option_text = callback_data.get("option")
-        elif hasattr(callback_data, "model_dump"):
-            d = callback_data.model_dump()
-            test_id = int(d.get("test_id"))
-            option_text = d.get("option")
-        else:
-            test_id = int(getattr(callback_data, "test_id", None))
-            option_text = getattr(callback_data, "option", None)
+        test_id_raw = get_callback_value(callback_data, "test_id")
+        option_text = get_callback_value(callback_data, "option")
+        try:
+            test_id = int(test_id_raw)
+        except Exception:
+            raise
         logger.info(f"📨 Получен callback_data: test_id={test_id}, option={option_text!r}")
 
         test = db.get_test(test_id)
@@ -122,7 +114,7 @@ async def handle_test_answer(callback: types.CallbackQuery, callback_data: dict 
             return
 
         options = json.loads(test[7])
-        logger.info(f"🔍 Варианты в тесте {test_id}: {list(options.keys())}")
+        logger.info(f"{E.SEARCH} Варианты в тесте {test_id}: {list(options.keys())}")
 
         if option_text in options:
             result_text = options[option_text]
