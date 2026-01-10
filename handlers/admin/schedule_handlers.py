@@ -6,7 +6,7 @@ from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
 
 from keyboards.keyboards import get_tests_list_keyboard, get_cancel_keyboard, get_admin_main_menu
-from states import ScheduleCreation
+from states import ScheduleCreation, EditSession, TestCreation, TestDeletion, ScheduleDeletion, EditTest
 from utils.database import Database
 from utils.emoji import Emoji as E
 from utils.callbacks import SelectTestCB, get_int_callback_value
@@ -33,19 +33,28 @@ async def start_scheduling(message: types.Message, state: FSMContext, db: Databa
     await message.answer("Выберите тест для отправки:", reply_markup=get_tests_list_keyboard(tests))
 
 
-@router.message(F.text == f"{E.CANCEL} Отмена")
+@router.message(F.text == f"{E.CANCEL} Отмена", F.state.in_([ScheduleCreation.waiting_for_test_selection, ScheduleCreation.waiting_for_channel, ScheduleCreation.waiting_for_time]))
 async def cancel_scheduling(message: types.Message, state: FSMContext):
     """Unified cancel handler for schedule creation states."""
-    st = await state.get_state()
-    # we explicitly check known scheduling states to avoid intercepting other flows
-    if st in (
-        ScheduleCreation.waiting_for_test_selection,
-        ScheduleCreation.waiting_for_channel,
-        ScheduleCreation.waiting_for_time,
-    ):
+    await state.clear()
+    await message.answer(f"{E.CANCEL} Планирование отменено", reply_markup=get_admin_main_menu())
+    return
+
+
+@router.message(F.text == f"{E.CANCEL} Отмена")
+async def handle_cancel(message: types.Message, state: FSMContext):
+    from aiogram.fsm.state import State
+    current_state = await state.get_state()  # Await the coroutine
+    cancellable_states = []
+    for group in [ScheduleCreation, EditSession, TestCreation, TestDeletion, ScheduleDeletion, EditTest]:
+        for attr_name, attr_value in vars(group).items():
+            if isinstance(attr_value, State):
+                cancellable_states.append(attr_value)
+    if current_state in cancellable_states:
         await state.clear()
-        await message.answer(f"{E.CANCEL} Планирование отменено", reply_markup=get_admin_main_menu())
-        return
+        await message.answer(f"{E.CANCEL} Действие отменено", reply_markup=get_admin_main_menu())
+    else:
+        await message.answer(f"{E.ERROR} Невозможно отменить в текущем состоянии.")
 
 
 @router.callback_query(SelectTestCB.filter())

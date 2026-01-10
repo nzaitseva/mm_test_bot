@@ -30,6 +30,7 @@ from keyboards.keyboards import (
     get_edit_session_keyboard,
     get_tests_view_keyboard,
     get_cancel_keyboard,
+    get_admin_main_menu
 )
 from states import EditSession
 from utils.database import Database
@@ -196,24 +197,15 @@ async def session_receive_value(message: types.Message, state: FSMContext, db: D
     cancel_variants = {f"{E.CANCEL} Отмена".lower(), "отмена"}
 
     if text.lower() in cancel_variants:
-        # If user cancels editing this field, return to choosing_field (do NOT clear whole session)
-        data = await state.get_data()
-        test_id = data.get("session_test_id")
-        if test_id:
-            await state.set_state(EditSession.choosing_field)
-            # remove reply keyboard and show inline edit keyboard
-            try:
-                await message.answer(" ", reply_markup=ReplyKeyboardRemove())
-            except Exception:
-                pass
-            await message.answer(f"{E.CANCEL} Изменение поля отменено. Выберите действие:", reply_markup=get_edit_session_keyboard(test_id))
-            logger.info(f"[session_receive_value] user={message.from_user.id} cancelled edit of field, returned to choosing_field for test_id={test_id}")
-            return
-        else:
-            # fallback: if session test id missing, clear state and go to main menu
-            await state.clear()
-            await message.answer("Изменение отменено", reply_markup=get_tests_view_keyboard(db.get_all_tests()))
-            return
+        # If user cancels, clear the entire edit session and return to main menu
+        await state.clear()
+        try:
+            await message.answer(" ", reply_markup=ReplyKeyboardRemove())
+        except Exception:
+            pass
+        await message.answer(f"{E.CANCEL} Режим редактирования отменён", reply_markup=get_admin_main_menu())
+        logger.info(f"[session_receive_value] user={message.from_user.id} cancelled entire edit session")
+        return
 
     # Otherwise — normal update flow
     data = await state.get_data()
@@ -380,5 +372,6 @@ async def session_cancel(callback: types.CallbackQuery, state: FSMContext, db: D
         await callback.message.answer(" ", reply_markup=ReplyKeyboardRemove())
     except Exception:
         pass
-    await callback.message.answer(f"{E.CANCEL} Режим редактирования отменён", reply_markup=get_tests_view_keyboard(db.get_all_tests()))
+    await callback.message.answer(f"{E.CANCEL} Режим редактирования отменён", reply_markup=get_admin_main_menu())
     await callback.answer()
+    #return
