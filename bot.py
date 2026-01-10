@@ -51,7 +51,7 @@ async def main():
 		await storage.close()
 		await bot.session.close()
 		if hasattr(db, 'close'):
-			await db.close()
+			db.close()
 		logger.info(f"{E.STOPPED} Bot stopped")
 
 

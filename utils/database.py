@@ -15,14 +15,19 @@ class Database:
         # ensure directory exists if path contains directories
         if os.path.dirname(self.db_path):
             os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        self.conn = sqlite3.connect(self.db_path)
         self.init_db()
+
+    def close(self):
+        if self.conn:
+            self.conn.close()
+            self.conn = None
 
     def connect(self):
         return sqlite3.connect(self.db_path)
 
     def init_db(self):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        cursor = self.conn.cursor()
 
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS settings (
@@ -69,17 +74,15 @@ class Database:
             ('timezone', 'UTC')
         )
 
-        conn.commit()
-        conn.close()
+        self.conn.commit()
 
     # helpers
     def _exec(self, sql: str, params: tuple = (), fetchone=False, fetchall=False, commit=False):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        cursor = self.conn.cursor()
         try:
             cursor.execute(sql, params)
             if commit:
-                conn.commit()
+                self.conn.commit()
             if fetchone:
                 return cursor.fetchone()
             if fetchall:
@@ -87,8 +90,6 @@ class Database:
         except Exception as e:
             logger.exception(f"DB error for query: {sql} params={params} -> {e}")
             raise
-        finally:
-            conn.close()
 
     # small helper to save photo via existing utility
     async def _save_photo_helper(self, message) -> str:
@@ -135,8 +136,7 @@ class Database:
     def add_test(self, title: str, content_type: str, text_content: Optional[str],
                  photo_file_id: Optional[str], photo_path: Optional[str], question_text: str, options: dict) -> int:
         # Use the same connection to get lastrowid reliably
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
+        cursor = self.conn.cursor()
         cursor.execute('''
             INSERT INTO tests (title, content_type, text_content, photo_file_id, photo_path, question_text, options)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -150,8 +150,7 @@ class Database:
             json.dumps(options, ensure_ascii=False)
         ))
         last_id = cursor.lastrowid
-        conn.commit()
-        conn.close()
+        self.conn.commit()
         return last_id
 
     def update_test(self, test_id: int, **fields) -> bool:
