@@ -27,6 +27,9 @@ class SessionDoneCB(_CB, prefix="sessiondone"):
 class SessionCancelCB(_CB, prefix="sessioncancel"):
     test_id: int
 
+class FieldCancelCB(_CB, prefix="fieldcancel"):
+    test_id: int
+
 class TestOptionCB(_CB, prefix="opt"):
     test_id: int
     option: str

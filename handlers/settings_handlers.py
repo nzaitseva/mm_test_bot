@@ -109,5 +109,5 @@ async def settings_back(callback: types.CallbackQuery, callback_data: dict | Non
             pass
 
     #await callback.message.answer("",reply_markup=get_admin_main_menu())
-
+    await callback.message.answer(f"{E.CANCEL} Изменение часового пояса отменено")
     await callback.answer()

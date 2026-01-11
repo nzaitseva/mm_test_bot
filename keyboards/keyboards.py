@@ -29,10 +29,11 @@ def get_admin_main_menu():
             [KeyboardButton(text=f"{E.LIST} Мои тесты"), KeyboardButton(text=f"{E.DELETE} Удалить тест")],
             [KeyboardButton(text=f"{E.SCHEDULES} Активные расписания"), KeyboardButton(text=f"{E.SETTINGS} Настройки")]
         ],
-        resize_keyboard=True
+        resize_keyboard=True,
+        one_time_keyboard=False
     )
 
-
+"""
 def get_cancel_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -41,7 +42,7 @@ def get_cancel_keyboard():
         resize_keyboard=True,
         one_time_keyboard=True
     )
-
+"""
 
 def get_settings_keyboard():
     return InlineKeyboardMarkup(
@@ -70,10 +71,10 @@ def get_timezone_keyboard():
 
     buttons.append([InlineKeyboardButton(text=f"{E.BACK} Назад", callback_data=TimezoneCB(tz="back").pack())])
 
-    # also provide a settings 'back' button earlier (use typed settings_cb)
-    buttons.append([InlineKeyboardButton(text=f"{E.BACK} Назад в настройки", callback_data=SettingsCB(action="back").pack())])
+    buttons.append([InlineKeyboardButton(text=f"{E.CANCEL} Отмена", callback_data=SettingsCB(action="back").pack())])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
+
 
 
 def get_content_type_keyboard():
@@ -187,7 +188,6 @@ def get_edit_session_keyboard(test_id):
         [InlineKeyboardButton(text=f"{E.PHOTO} Картинка", callback_data=SessionEditCB(test_id=test_id, field="photo").pack()),
          InlineKeyboardButton(text=f"{E.QUESTION} Вопрос", callback_data=SessionEditCB(test_id=test_id, field="question").pack())],
         [InlineKeyboardButton(text=f"{E.TEXT} Варианты", callback_data=SessionEditCB(test_id=test_id, field="options").pack())],
-        [InlineKeyboardButton(text=f"{E.CONFIRM} Готово", callback_data=SessionDoneCB(test_id=test_id).pack()),
-         InlineKeyboardButton(text=f"{E.PREV} Отмена", callback_data=SessionCancelCB(test_id=test_id).pack())]
+        [InlineKeyboardButton(text=f"{E.CONFIRM} Готово", callback_data=SessionDoneCB(test_id=test_id).pack())]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
