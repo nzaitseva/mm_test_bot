@@ -33,6 +33,16 @@ def get_admin_main_menu():
     )
 
 
+def get_cancel_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text=f"{E.CANCEL} Отмена")]
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=True
+    )
+
+
 def get_settings_keyboard():
     return InlineKeyboardMarkup(
         inline_keyboard=[

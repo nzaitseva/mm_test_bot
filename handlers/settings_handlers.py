@@ -108,6 +108,6 @@ async def settings_back(callback: types.CallbackQuery, callback_data: dict | Non
         except Exception:
             pass
 
-    await callback.message.answer("Главное меню:", reply_markup=get_admin_main_menu())
+    #await callback.message.answer("",reply_markup=get_admin_main_menu())
 
     await callback.answer()

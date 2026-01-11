@@ -47,7 +47,7 @@ async def process_content_type(callback: types.CallbackQuery, state: FSMContext)
     if content_type in ("text", "both"):
         await state.set_state(TestCreation.waiting_for_text_content)
         await callback.message.answer(
-            "Введите текстовое содержание теста:",
+            "Введите текстовое описание теста:",
             reply_markup=get_cancel_keyboard()
         )
     else:
@@ -74,7 +74,7 @@ async def process_text_content(message: types.Message, state: FSMContext):
         await message.answer("Введите вопрос теста:", reply_markup=get_cancel_keyboard())
     else:
         await state.set_state(TestCreation.waiting_for_photo)
-        await message.answer("Теперь отправьте картинку:", reply_markup=get_cancel_keyboard())
+        await message.answer("Отправьте картинку:", reply_markup=get_cancel_keyboard())
 
 
 @router.message(TestCreation.waiting_for_photo)

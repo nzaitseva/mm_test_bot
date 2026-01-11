@@ -212,7 +212,7 @@ class Database:
 
     def get_active_schedules(self):
         return self._exec('''
-            SELECT s.id, t.title, s.channel_id, s.scheduled_time 
+            SELECT s.id, s.test_id, t.title, s.channel_id, s.scheduled_time 
             FROM schedule s 
             JOIN tests t ON s.test_id = t.id 
             WHERE s.is_sent = 0

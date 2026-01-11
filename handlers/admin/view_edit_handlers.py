@@ -23,14 +23,13 @@ import logging
 
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
-from aiogram.types import FSInputFile, ReplyKeyboardRemove
+from aiogram.types import FSInputFile, ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 
 from keyboards.keyboards import (
     get_test_detail_keyboard,
     get_edit_session_keyboard,
     get_tests_view_keyboard,
     get_cancel_keyboard,
-    get_admin_main_menu
 )
 from states import EditSession
 from utils.database import Database
@@ -87,15 +86,19 @@ async def view_test_detail(callback: types.CallbackQuery, state: FSMContext, db:
     try:
         # Prefer sending local file if exists, otherwise file_id or text only
         if test[5] and os.path.exists(test[5]):
-            await callback.message.answer_photo(photo=FSInputFile(test[5]))
+            photo_msg = await callback.message.answer_photo(photo=FSInputFile(test[5]))
+            await state.update_data(last_photo_message_id=photo_msg.message_id)
             await callback.message.answer(details_text, parse_mode="HTML", reply_markup=get_test_detail_keyboard(test_id))
         elif test[4]:
-            await callback.message.answer_photo(photo=test[4])
+            photo_msg = await callback.message.answer_photo(photo=test[4])
+            await state.update_data(last_photo_message_id=photo_msg.message_id)
             await callback.message.answer(details_text, parse_mode="HTML", reply_markup=get_test_detail_keyboard(test_id))
         else:
+            await state.update_data(last_photo_message_id=None)
             await callback.message.answer(details_text, parse_mode="HTML", reply_markup=get_test_detail_keyboard(test_id))
     except Exception:
         logger.exception("Error while sending test detail")
+        await state.update_data(last_photo_message_id=None)
         await callback.message.answer(details_text, parse_mode="HTML", reply_markup=get_test_detail_keyboard(test_id))
 
     await callback.answer()
@@ -112,6 +115,15 @@ async def detail_back(callback: types.CallbackQuery, state: FSMContext, db: Data
         await callback.message.answer("У вас нет тестов")
         await callback.answer()
         return
+
+    # Delete the photo message if it exists
+    data = await state.get_data()
+    if last_photo_id := data.get('last_photo_message_id'):
+        try:
+            await callback.bot.delete_message(callback.message.chat.id, last_photo_id)
+        except Exception:
+            pass
+        await state.update_data(last_photo_message_id=None)
 
     await callback.message.answer("Выберите тест для просмотра:", reply_markup=get_tests_view_keyboard(tests))
     await callback.answer()
@@ -139,7 +151,7 @@ async def start_edit_session(callback: types.CallbackQuery, state: FSMContext, d
 
     # remove reply keyboard and show inline session keyboard
     try:
-        await callback.message.answer(" ", reply_markup=ReplyKeyboardRemove())
+        await callback.message.answer("​", reply_markup=ReplyKeyboardRemove())
     except Exception:
         pass
     await callback.message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
@@ -183,7 +195,12 @@ async def session_choose_field(callback: types.CallbackQuery, state: FSMContext,
         "options": "Введите варианты заново в формате:\nВариант :: Результат (каждый вариант с новой строки):",
     }
 
-    await callback.message.answer(prompts.get(field, "Введите значение:"), reply_markup=get_cancel_keyboard())
+    reply_markup = get_cancel_keyboard() if field != "photo" else InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=f"{E.CANCEL} Отмена", callback_data=SessionCancelCB(test_id=test_id).pack())]
+        ]
+    )
+    await callback.message.answer(prompts.get(field, "Введите значение:"), reply_markup=reply_markup)
     await callback.answer()
 
 
@@ -200,10 +217,10 @@ async def session_receive_value(message: types.Message, state: FSMContext, db: D
         # If user cancels, clear the entire edit session and return to main menu
         await state.clear()
         try:
-            await message.answer(" ", reply_markup=ReplyKeyboardRemove())
+            await message.answer("​", reply_markup=ReplyKeyboardRemove())
         except Exception:
             pass
-        await message.answer(f"{E.CANCEL} Режим редактирования отменён", reply_markup=get_admin_main_menu())
+        await message.answer(f"{E.CANCEL} Режим редактирования отменён", reply_markup=get_tests_view_keyboard(db.get_all_tests()))
         logger.info(f"[session_receive_value] user={message.from_user.id} cancelled entire edit session")
         return
 
@@ -222,6 +239,10 @@ async def session_receive_value(message: types.Message, state: FSMContext, db: D
             success = db.update_test(test_id, title=message.text)
             if success:
                 await message.answer(f"{E.CONFIRM} Название обновлено", reply_markup=get_edit_session_keyboard(test_id))
+                try:
+                    await message.answer("​", reply_markup=ReplyKeyboardRemove())
+                except Exception:
+                    pass
             else:
                 await message.answer(f"{E.ERROR} Не удалось обновить название")
         elif field == "text":
@@ -229,12 +250,20 @@ async def session_receive_value(message: types.Message, state: FSMContext, db: D
             success = db.update_test(test_id, text_content=val)
             if success:
                 await message.answer(f"{E.CONFIRM} Текст обновлён", reply_markup=get_edit_session_keyboard(test_id))
+                try:
+                    await message.answer("​", reply_markup=ReplyKeyboardRemove())
+                except Exception:
+                    pass
             else:
                 await message.answer(f"{E.ERROR} Не удалось обновить текст")
         elif field == "question":
             success = db.update_test(test_id, question_text=message.text)
             if success:
                 await message.answer(f"{E.CONFIRM} Вопрос обновлён", reply_markup=get_edit_session_keyboard(test_id))
+                try:
+                    await message.answer("​", reply_markup=ReplyKeyboardRemove())
+                except Exception:
+                    pass
             else:
                 await message.answer(f"{E.ERROR} Не удалось обновить вопрос")
         elif field == "options":
@@ -249,6 +278,10 @@ async def session_receive_value(message: types.Message, state: FSMContext, db: D
             success = db.update_test(test_id, options=options)
             if success:
                 await message.answer(f"{E.CONFIRM} Варианты обновлены", reply_markup=get_edit_session_keyboard(test_id))
+                try:
+                    await message.answer("​", reply_markup=ReplyKeyboardRemove())
+                except Exception:
+                    pass
             else:
                 await message.answer(f"{E.ERROR} Не удалось обновить варианты")
         elif field == "photo":
@@ -288,11 +321,11 @@ async def session_receive_photo(message: types.Message, state: FSMContext, db: D
 
         success = db.update_test(test_id, photo_file_id=photo_file_id, photo_path=photo_path)
         if success:
-            await message.answer(f"{E.CONFIRM} Картинка обновлена", reply_markup=get_edit_session_keyboard(test_id))
             try:
-                await message.answer(" ", reply_markup=ReplyKeyboardRemove())
+                await message.answer("​", reply_markup=ReplyKeyboardRemove())
             except Exception:
                 pass
+            await message.answer(f"{E.CONFIRM} Картинка обновлена", reply_markup=get_edit_session_keyboard(test_id))
         else:
             await message.answer(f"{E.ERROR} Не удалось обновить картинку")
     except Exception:
@@ -328,11 +361,11 @@ async def session_receive_document_image(message: types.Message, state: FSMConte
 
         success = db.update_test(test_id, photo_file_id=file_id, photo_path=photo_path)
         if success:
-            await message.answer(f"{E.CONFIRM} Картинка обновлена", reply_markup=get_edit_session_keyboard(test_id))
             try:
-                await message.answer(" ", reply_markup=ReplyKeyboardRemove())
+                await message.answer("​", reply_markup=ReplyKeyboardRemove())
             except Exception:
                 pass
+            await message.answer(f"{E.CONFIRM} Картинка обновлена", reply_markup=get_edit_session_keyboard(test_id))
         else:
             await message.answer(f"{E.ERROR} Не удалось обновить картинку")
     except Exception:
@@ -354,7 +387,7 @@ async def session_done(callback: types.CallbackQuery, state: FSMContext, db: Dat
         return
     await state.clear()
     try:
-        await callback.message.answer(" ", reply_markup=ReplyKeyboardRemove())
+        await callback.message.answer("​", reply_markup=ReplyKeyboardRemove())
     except Exception:
         pass
     await callback.message.answer(f"{E.CONFIRM} Редактирование завершено", reply_markup=get_tests_view_keyboard(db.get_all_tests()))
@@ -369,9 +402,8 @@ async def session_cancel(callback: types.CallbackQuery, state: FSMContext, db: D
 
     await state.clear()
     try:
-        await callback.message.answer(" ", reply_markup=ReplyKeyboardRemove())
+        await callback.message.answer("​", reply_markup=ReplyKeyboardRemove())
     except Exception:
         pass
-    await callback.message.answer(f"{E.CANCEL} Режим редактирования отменён", reply_markup=get_admin_main_menu())
+    await callback.message.answer(f"{E.CANCEL} Режим редактирования отменён", reply_markup=get_tests_view_keyboard(db.get_all_tests()))
     await callback.answer()
-    #return

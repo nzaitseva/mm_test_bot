@@ -21,7 +21,7 @@ class SchedulerManager:
 
 		all_schedules = self.db.get_active_schedules()
 
-		for schedule_id, test_id, channel_id, test_title in all_schedules:
+		for schedule_id, test_id, test_title, channel_id, scheduled_time in all_schedules:
 			# Get time from db in UTC
 			# scheduled_time stored as ISO string in DB via Database.add_schedule
 			try:
