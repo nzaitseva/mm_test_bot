@@ -10,8 +10,7 @@ from keyboards.keyboards import get_tests_list_keyboard, get_confirmation_keyboa
 from states import TestDeletion
 from utils.database import Database
 from utils.emoji import Emoji as E
-from utils.callbacks import DeleteTestCB, ConfirmDeleteTestCB, CancelDeleteTestCB, \
-    get_callback_value,get_int_callback_value
+from utils.callbacks import DeleteTestCB, ConfirmDeleteTestCB, CancelDeleteTestCB, get_int_callback_value
 from utils.config import load_config
 from filters.admin_filters import IsAdminFilter
 

@@ -91,10 +91,6 @@ async def set_timezone(callback: types.CallbackQuery, db: Database, callback_dat
 
 
 @router.callback_query(SettingsCB.filter())
-# SettingsCB with action='back'.
-# `edit_text` doesn't accept `ReplyKeyboardMarkup` (InlineKeyboardMarkup is expected).
-# So we edit the message text (without reply_markup) and then send a new message
-# with `get_admin_main_menu()` (the reply keyboard).
 async def settings_back(callback: types.CallbackQuery, callback_data: dict | None = None):
     if callback_data is None:
         callback_data = SettingsCB.unpack(callback.data or "")
@@ -108,6 +104,5 @@ async def settings_back(callback: types.CallbackQuery, callback_data: dict | Non
         except Exception:
             pass
 
-    #await callback.message.answer("",reply_markup=get_admin_main_menu())
     await callback.message.answer(f"{E.CANCEL} Изменение часового пояса отменено")
     await callback.answer()

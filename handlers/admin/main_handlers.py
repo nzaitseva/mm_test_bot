@@ -120,7 +120,11 @@ async def request_delete_schedule(callback: types.CallbackQuery, db: Database, c
     # Edit current message to request confirmation
     test_title = None
     try:
-        rows = db._exec('SELECT t.title FROM schedule s JOIN tests t ON s.test_id = t.id WHERE s.id = ?', (int(schedule_id),), fetchone=True)
+        rows = db._exec(
+            'SELECT t.title FROM schedule s JOIN tests t ON s.test_id = t.id WHERE s.id = ?',
+            (int(schedule_id),),
+            fetchone=True
+        )
         test_title = rows[0] if rows else None
     except Exception:
         test_title = None
@@ -129,7 +133,9 @@ async def request_delete_schedule(callback: types.CallbackQuery, db: Database, c
     if test_title:
         text += f" для теста: <b>{test_title}</b>"
 
-    await callback.message.edit_text(text, parse_mode="HTML", reply_markup=get_confirmation_keyboard(action="delete_schedule", item_id=schedule_id))
+    await callback.message.edit_text(
+        text, parse_mode="HTML", reply_markup=get_confirmation_keyboard(action="delete_schedule", item_id=schedule_id)
+    )
     await callback.answer()
 
 
