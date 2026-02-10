@@ -19,22 +19,11 @@ from aiogram.fsm.context import FSMContext
 from utils.emoji import Emoji as E
 from utils.database import Database
 from utils.config import load_config
-from utils.callbacks import (
-    DeleteScheduleCB,
-    ConfirmDeleteScheduleCB,
-    CancelDeleteScheduleCB,
-    get_callback_value,
-    get_int_callback_value
-)
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from utils.callbacks import DeleteScheduleCB, ConfirmDeleteScheduleCB, CancelDeleteScheduleCB, \
+    get_callback_value,get_int_callback_value
 from filters.admin_filters import IsAdminFilter
-from keyboards.keyboards import (
-    get_admin_main_menu,
-    get_tests_view_keyboard,
-    get_settings_keyboard,
-    get_schedules_list_keyboard,
-    get_confirmation_keyboard,
-)
+from keyboards.keyboards import get_admin_main_menu, get_tests_view_keyboard, get_settings_keyboard, \
+    get_schedules_list_keyboard, get_confirmation_keyboard
 
 
 logger = logging.getLogger(__name__)
@@ -67,7 +56,7 @@ async def admin_start(message: types.Message, state: FSMContext):
 async def show_my_tests(message: types.Message, db: Database):
     logger.info(f"[show_my_tests] from={message.from_user.id}")
 
-    tests = db.get_all_tests()
+    tests = await db.get_all_tests()
     if not tests:
         await message.answer(f"{E.POST_BOX} У вас пока нет созданных тестов")
         return
@@ -79,7 +68,7 @@ async def show_my_tests(message: types.Message, db: Database):
 async def show_settings(message: types.Message, db: Database):
     logger.info(f"[show_settings] from={message.from_user.id} text={message.text!r}")
 
-    timezone = db.get_timezone()
+    timezone = await db.get_timezone()
     text = (
         f"{E.SETTINGS} <b>Настройки бота</b>\n\n"
         f"{E.STAPLE} <b>Текущий часовой пояс:</b> {timezone}\n\n"
@@ -92,12 +81,12 @@ async def show_settings(message: types.Message, db: Database):
 async def show_active_schedules(message: types.Message, db: Database):
     logger.info(f"[show_active_schedules] from={message.from_user.id}")
 
-    schedules = db.get_active_schedules()
+    schedules = await db.get_active_schedules()
     if not schedules:
         await message.answer(f"{E.POST_BOX} Нет активных расписаний")
         return
 
-    timezone_str = db.get_timezone()
+    timezone_str = await db.get_timezone()
     tz = pytz.timezone(timezone_str)
 
     text = f"{E.SCHEDULES} Активные расписания ({timezone_str}):\n\n"
@@ -131,7 +120,7 @@ async def request_delete_schedule(callback: types.CallbackQuery, db: Database, c
     # Edit current message to request confirmation
     test_title = None
     try:
-        rows = db._exec(
+        rows = await db._exec(
             'SELECT t.title FROM schedule s JOIN tests t ON s.test_id = t.id WHERE s.id = ?',
             (int(schedule_id),),
             fetchone=True
@@ -161,7 +150,7 @@ async def confirm_delete_schedule(callback: types.CallbackQuery, db: Database, c
         await callback.answer()
         return
 
-    success = db.delete_schedule(schedule_id)
+    success = await db.delete_schedule(schedule_id)
     if success:
         await callback.message.edit_text(f"{E.CONFIRM} Расписание удалено.")
     else:
@@ -176,4 +165,3 @@ async def cancel_delete_schedule(callback: types.CallbackQuery, callback_data: d
 
     await callback.message.edit_text(f"{E.CANCEL} Удаление отменено")
     await callback.answer()
-

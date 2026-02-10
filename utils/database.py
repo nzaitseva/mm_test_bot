@@ -1,4 +1,4 @@
-import sqlite3
+import aiosqlite
 import json
 import logging
 import os
@@ -12,38 +12,53 @@ logger = logging.getLogger(__name__)
 class Database:
     def __init__(self, db_path: str = "tests.db"):
         self.db_path = db_path
-        # ensure directory exists if path contains directories
         if os.path.dirname(self.db_path):
             os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        self.conn = sqlite3.connect(self.db_path)
-        self.init_db()
+        self.conn: Optional[aiosqlite.Connection] = None
 
-    def close(self):
+    async def init(self):
+        self.conn = await aiosqlite.connect(self.db_path)
+        self.conn.row_factory = aiosqlite.Row
+        await self._init_db()
+
+    async def close(self):
         if self.conn:
-            self.conn.close()
+            await self.conn.close()
             self.conn = None
 
-    def connect(self):
-        return sqlite3.connect(self.db_path)
+    # low-level exec helper
+    async def _exec(self, sql: str, params: tuple = (), fetchone: bool = False, fetchall: bool = False, commit: bool = False):
+        if not self.conn:
+            raise RuntimeError("Database not initialized. Call await db.init() first.")
+        try:
+            cur = await self.conn.execute(sql, params)
+            if commit:
+                await self.conn.commit()
+            if fetchone:
+                return await cur.fetchone()
+            if fetchall:
+                return await cur.fetchall()
+            return cur
+        except Exception as e:
+            logger.exception(f"DB error for query: {sql} params={params} -> {e}")
+            raise
 
-    def init_db(self):
-        cursor = self.conn.cursor()
-
-        cursor.execute('''
+    async def _init_db(self):
+        await self._exec('''
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             )
-        ''')
+        ''', commit=True)
 
-        cursor.execute('''
+        await self._exec('''
             CREATE TABLE IF NOT EXISTS admins (
                 user_id INTEGER PRIMARY KEY,
                 added_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
-        ''')
+        ''', commit=True)
 
-        cursor.execute('''
+        await self._exec('''
             CREATE TABLE IF NOT EXISTS tests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
@@ -56,9 +71,9 @@ class Database:
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 is_active BOOLEAN DEFAULT 1
             )
-        ''')
+        ''', commit=True)
 
-        cursor.execute('''
+        await self._exec('''
             CREATE TABLE IF NOT EXISTS schedule (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 test_id INTEGER,
@@ -67,29 +82,13 @@ class Database:
                 is_sent BOOLEAN DEFAULT 0,
                 FOREIGN KEY (test_id) REFERENCES tests (id)
             )
-        ''')
+        ''', commit=True)
 
-        cursor.execute(
+        await self._exec(
             'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)',
-            ('timezone', 'UTC')
+            ('timezone', 'UTC'),
+            commit=True
         )
-
-        self.conn.commit()
-
-    # helpers
-    def _exec(self, sql: str, params: tuple = (), fetchone=False, fetchall=False, commit=False):
-        cursor = self.conn.cursor()
-        try:
-            cursor.execute(sql, params)
-            if commit:
-                self.conn.commit()
-            if fetchone:
-                return cursor.fetchone()
-            if fetchall:
-                return cursor.fetchall()
-        except Exception as e:
-            logger.exception(f"DB error for query: {sql} params={params} -> {e}")
-            raise
 
     # small helper to save photo via existing utility
     async def _save_photo_helper(self, message) -> str:
@@ -97,47 +96,45 @@ class Database:
         return await save_photo_from_message(message)
 
     # Settings
-    def get_all_settings(self):
-        rows = self._exec('SELECT key, value FROM settings', fetchall=True)
+    async def get_all_settings(self):
+        rows = await self._exec('SELECT key, value FROM settings', fetchall=True)
         return dict(rows) if rows else {}
 
-    def get_setting(self, key: str, default: str = None) -> Optional[str]:
-        row = self._exec('SELECT value FROM settings WHERE key = ?', (key,), fetchone=True)
+    async def get_setting(self, key: str, default: str = None) -> Optional[str]:
+        row = await self._exec('SELECT value FROM settings WHERE key = ?', (key,), fetchone=True)
         return row[0] if row else default
 
-    def set_setting(self, key: str, value: str) -> bool:
+    async def set_setting(self, key: str, value: str) -> bool:
         try:
-            self._exec('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (key, value), commit=True)
+            await self._exec('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', (key, value), commit=True)
             return True
         except Exception as e:
             logger.exception(f"Failed to set setting {key}={value}: {e}")
             return False
 
-    def get_timezone(self) -> str:
-        return self.get_setting('timezone', 'UTC')
+    async def get_timezone(self) -> str:
+        return await self.get_setting('timezone', 'UTC')
 
-    def set_timezone(self, timezone: str) -> bool:
-        return self.set_setting('timezone', timezone)
+    async def set_timezone(self, timezone: str) -> bool:
+        return await self.set_setting('timezone', timezone)
 
     # Admins
-    def is_admin(self, user_id):
-        row = self._exec('SELECT 1 FROM admins WHERE user_id = ?', (int(user_id),), fetchone=True)
+    async def is_admin(self, user_id):
+        row = await self._exec('SELECT 1 FROM admins WHERE user_id = ?', (int(user_id),), fetchone=True)
         return row is not None
 
-    def add_admin(self, user_id):
+    async def add_admin(self, user_id):
         try:
-            self._exec('INSERT OR IGNORE INTO admins (user_id) VALUES (?)', (int(user_id),), commit=True)
+            await self._exec('INSERT OR IGNORE INTO admins (user_id) VALUES (?)', (int(user_id),), commit=True)
             return True
         except Exception as e:
             logger.exception(f"Ошибка при добавлении администратора: {e}")
             return False
 
     # Tests
-    def add_test(self, title: str, content_type: str, text_content: Optional[str],
+    async def add_test(self, title: str, content_type: str, text_content: Optional[str],
                  photo_file_id: Optional[str], photo_path: Optional[str], question_text: str, options: dict) -> int:
-        # Use the same connection to get lastrowid reliably
-        cursor = self.conn.cursor()
-        cursor.execute('''
+        cur = await self._exec('''
             INSERT INTO tests (title, content_type, text_content, photo_file_id, photo_path, question_text, options)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (
@@ -148,12 +145,11 @@ class Database:
             str(photo_path) if photo_path else None,
             str(question_text),
             json.dumps(options, ensure_ascii=False)
-        ))
-        last_id = cursor.lastrowid
-        self.conn.commit()
-        return last_id
+        ), commit=True)
+        # aiosqlite returns cursor-like object; get lastrowid
+        return cur.lastrowid if getattr(cur, 'lastrowid', None) is not None else None
 
-    def update_test(self, test_id: int, **fields) -> bool:
+    async def update_test(self, test_id: int, **fields) -> bool:
         if not fields:
             return False
 
@@ -175,61 +171,63 @@ class Database:
         values.append(int(test_id))
         sql = f"UPDATE tests SET {', '.join(update_parts)} WHERE id = ?"
         try:
-            self._exec(sql, tuple(values), commit=True)
+            await self._exec(sql, tuple(values), commit=True)
             return True
         except Exception as e:
             logger.exception(f"Ошибка при обновлении теста {test_id}: {e}")
             return False
 
-    def delete_test(self, test_id):
+    async def delete_test(self, test_id):
         try:
-            self._exec('UPDATE tests SET is_active = 0 WHERE id = ?', (int(test_id),), commit=True)
+            await self._exec('UPDATE tests SET is_active = 0 WHERE id = ?', (int(test_id),), commit=True)
             return True
         except Exception as e:
             logger.exception(f"Ошибка при удалении теста: {e}")
             return False
 
-    def get_test(self, test_id):
-        return self._exec('''
+    async def get_test(self, test_id):
+        return await self._exec('''
             SELECT id, title, content_type, text_content, photo_file_id, photo_path, question_text, options, created_at, is_active
             FROM tests WHERE id = ?
         ''', (int(test_id),), fetchone=True)
 
-    def get_all_tests(self):
-        return self._exec('SELECT id, title FROM tests WHERE is_active = 1', fetchall=True) or []
+    async def get_all_tests(self):
+        rows = await self._exec('SELECT id, title FROM tests WHERE is_active = 1', fetchall=True)
+        return rows or []
 
     # Schedule
-    def add_schedule(self, test_id: int, channel_id: str, scheduled_time: datetime) -> bool:
-        self._exec('''
+    async def add_schedule(self, test_id: int, channel_id: str, scheduled_time: datetime) -> bool:
+        await self._exec('''
             INSERT INTO schedule (test_id, channel_id, scheduled_time)
             VALUES (?, ?, ?)
         ''', (int(test_id), str(channel_id), scheduled_time.isoformat()), commit=True)
         return True
 
-    def has_active_schedules(self, test_id):
-        row = self._exec('SELECT COUNT(*) FROM schedule WHERE test_id = ? AND is_sent = 0', (int(test_id),), fetchone=True)
+    async def has_active_schedules(self, test_id):
+        row = await self._exec('SELECT COUNT(*) FROM schedule WHERE test_id = ? AND is_sent = 0', (int(test_id),), fetchone=True)
         return (row[0] if row else 0) > 0
 
-    def get_active_schedules(self):
-        return self._exec('''
+    async def get_active_schedules(self):
+        rows = await self._exec('''
             SELECT s.id, s.test_id, t.title, s.channel_id, s.scheduled_time 
             FROM schedule s 
             JOIN tests t ON s.test_id = t.id 
             WHERE s.is_sent = 0
             ORDER BY s.scheduled_time
-        ''', fetchall=True) or []
+        ''', fetchall=True)
+        return rows or []
 
-    def delete_schedule(self, schedule_id):
+    async def delete_schedule(self, schedule_id):
         try:
-            self._exec('DELETE FROM schedule WHERE id = ?', (int(schedule_id),), commit=True)
+            await self._exec('DELETE FROM schedule WHERE id = ?', (int(schedule_id),), commit=True)
             return True
         except Exception as e:
             logger.exception(f"Ошибка при удалении расписания: {e}")
             return False
 
-    def mark_schedule_sent(self, schedule_id):
+    async def mark_schedule_sent(self, schedule_id):
         try:
-            self._exec('UPDATE schedule SET is_sent = 1 WHERE id = ?', (int(schedule_id),), commit=True)
+            await self._exec('UPDATE schedule SET is_sent = 1 WHERE id = ?', (int(schedule_id),), commit=True)
             return True
         except Exception as e:
             logger.exception(f"Ошибка при пометке расписания как отправленного: {e}")

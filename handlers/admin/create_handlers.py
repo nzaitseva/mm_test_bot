@@ -157,7 +157,7 @@ async def process_options(message: types.Message, state: FSMContext, db: Databas
             return
 
         data = await state.get_data()
-        test_id = db.add_test(
+        test_id = await db.add_test(
             title=data.get("title"),
             content_type=data.get("content_type"),
             text_content=data.get("text_content", ""),

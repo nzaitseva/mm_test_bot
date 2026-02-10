@@ -26,7 +26,7 @@ router.callback_query.filter(IsAdminFilter(config.admin_ids))
 async def start_test_deletion(message: types.Message, state: FSMContext, db: Database):
     logger.info(f"[start_test_deletion] from={message.from_user.id}")
 
-    tests = db.get_all_tests()
+    tests = await db.get_all_tests()
     if not tests:
         await message.answer(f"{E.POST_BOX} У вас пока нет созданных тестов для удаления")
         return
@@ -46,11 +46,11 @@ async def process_test_selection_for_deletion(callback: types.CallbackQuery, db:
         await callback.answer()
         return
 
-    if db.has_active_schedules(test_id):
+    if await db.has_active_schedules(test_id):
         await callback.answer(f"{E.ERROR} Нельзя удалить тест с активными расписаниями!", show_alert=True)
         return
 
-    test = db.get_test(test_id)
+    test = await db.get_test(test_id)
     test_title = test[1] if test else "Неизвестный тест"
     await callback.message.answer(
         f"{E.WARNING}️ Вы уверены, что хотите удалить тест:\n\n<b>{test_title}</b>\n\nЭто действие нельзя отменить!",
@@ -71,10 +71,10 @@ async def confirm_test_deletion(callback: types.CallbackQuery, db: Database, cal
         await callback.answer()
         return
 
-    test = db.get_test(test_id)
+    test = await db.get_test(test_id)
     if test:
         test_title = test[1]
-        success = db.delete_test(test_id)
+        success = await db.delete_test(test_id)
         if success:
             await callback.message.edit_text(f"{E.CONFIRM} Тест «{test_title}» успешно удален!")
         else:

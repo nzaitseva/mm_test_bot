@@ -23,13 +23,14 @@ async def main():
 		return
 
 	db = Database()
+	await db.init()
 	bot = Bot(token=config.bot_token)
 	storage = MemoryStorage()
 	dp = Dispatcher(storage=storage)
 
 	try:
 		for admin_id in config.admin_ids:
-			db.add_admin(admin_id)
+			await db.add_admin(admin_id)
 		logger.info(f"{E.INFO} Admins set: {config.admin_ids}")
 
 		dp.include_router(user_router)
@@ -51,7 +52,7 @@ async def main():
 		await storage.close()
 		await bot.session.close()
 		if hasattr(db, 'close'):
-			db.close()
+			await db.close()
 		logger.info(f"{E.STOPPED} Bot stopped")
 
 

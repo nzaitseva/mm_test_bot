@@ -24,7 +24,7 @@ router.callback_query.filter(IsAdminFilter(config.admin_ids))
 async def start_scheduling(message: types.Message, state: FSMContext, db: Database):
     logger.info(f"[start_scheduling] from={message.from_user.id}")
 
-    tests = db.get_all_tests()
+    tests = await db.get_all_tests()
     if not tests:
         await message.answer(f"{E.ERROR} Сначала создайте тест")
         return
@@ -106,16 +106,16 @@ async def process_channel(message: types.Message, state: FSMContext):
 async def process_time(message: types.Message, state: FSMContext, db: Database):
     logger.info(f"[process_time] from={message.from_user.id} text={message.text!r}")
     try:
-        timezone_str = db.get_timezone()
+        timezone_str = await db.get_timezone()
         tz = pytz.timezone(timezone_str)
         local_time = datetime.strptime(message.text, "%d.%m.%Y %H:%M")
         localized_time = tz.localize(local_time)
         utc_time = localized_time.astimezone(pytz.utc)
 
         data = await state.get_data()
-        db.add_schedule(data["test_id"], data["channel_id"], utc_time)
+        await db.add_schedule(data["test_id"], data["channel_id"], utc_time)
 
-        test = db.get_test(data["test_id"])
+        test = await db.get_test(data["test_id"])
         test_title = test[1] if test else "Неизвестный тест"
         await message.answer(
             f"{E.CONFIRM} Тест '{test_title}' запланирован!\n"

@@ -19,13 +19,13 @@ class SchedulerManager:
 	async def check_pending_schedules(self):
 		now_utc = datetime.now(pytz.utc)
 
-		all_schedules = self.db.get_active_schedules()
+		all_schedules = await self.db.get_active_schedules()
 
 		for schedule_id, test_id, test_title, channel_id, scheduled_time in all_schedules:
 			# Get time from db in UTC
 			# scheduled_time stored as ISO string in DB via Database.add_schedule
 			try:
-				scheduled_time_str = self._get_schedule_time(schedule_id)
+				scheduled_time_str = await self._get_schedule_time(schedule_id)
 				scheduled_time_utc = datetime.fromisoformat(scheduled_time_str).replace(tzinfo=pytz.utc)
 			except Exception:
 				logger.exception("Failed to parse scheduled_time for schedule_id=%s", schedule_id)
@@ -36,7 +36,7 @@ class SchedulerManager:
 					success = await send_test_to_channel(test_id, channel_id, self.bot, self.db)
 
 					if success:
-						self.db.mark_schedule_sent(schedule_id)
+						await self.db.mark_schedule_sent(schedule_id)
 						logger.info(f"{E.CONFIRM} Тест '{test_title}' отправлен в {channel_id}")
 					else:
 						logger.info(f"{E.ERROR} Ошибка отправки теста '{test_title}' в {channel_id}")
@@ -44,8 +44,8 @@ class SchedulerManager:
 				except Exception as e:
 					logger.info(f"{E.ERROR} Ошибка отправки теста: {e}")
 
-	def _get_schedule_time(self, schedule_id):
-		rows = self.db._exec('SELECT scheduled_time FROM schedule WHERE id = ?', (int(schedule_id),), fetchone=True)
+	async def _get_schedule_time(self, schedule_id):
+		rows = await self.db._exec('SELECT scheduled_time FROM schedule WHERE id = ?', (int(schedule_id),), fetchone=True)
 		return rows[0] if rows else None
 
 	async def start_scheduler(self):

@@ -44,7 +44,7 @@ async def view_test_detail(callback: types.CallbackQuery, state: FSMContext, db:
         await callback.answer()
         return
 
-    test = db.get_test(test_id)
+    test = await db.get_test(test_id)
     if not test:
         await callback.answer(f"{E.ERROR} Тест не найден", show_alert=True)
         return
@@ -91,7 +91,7 @@ async def detail_back(callback: types.CallbackQuery, state: FSMContext, db: Data
     if callback_data is None:
         callback_data = DetailBackCB.unpack(callback.data or "")
 
-    tests = db.get_all_tests()
+    tests = await db.get_all_tests()
     if not tests:
         await callback.message.answer("У вас нет тестов")
         await callback.answer()
@@ -195,7 +195,7 @@ async def session_receive_value(message: types.Message, state: FSMContext, db: D
     if text.lower() in cancel_variants:
         # If user cancels, clear the entire edit session and return to main menu
         await state.clear()
-        await message.answer(f"{E.CANCEL} Режим редактирования отменён", reply_markup=get_tests_view_keyboard(db.get_all_tests()))
+        await message.answer(f"{E.CANCEL} Режим редактирования отменён", reply_markup=get_tests_view_keyboard(await db.get_all_tests()))
         #await message.answer("Главное меню:", reply_markup=get_admin_main_menu())
         logger.info(f"[session_receive_value] user={message.from_user.id} cancelled entire edit session")
         return
@@ -212,7 +212,7 @@ async def session_receive_value(message: types.Message, state: FSMContext, db: D
 
     try:
         if field == "title":
-            success = db.update_test(test_id, title=message.text)
+            success = await db.update_test(test_id, title=message.text)
             if success:
                 await message.answer(f"{E.CONFIRM} Название обновлено", reply_markup=get_admin_main_menu())
             else:
@@ -221,7 +221,7 @@ async def session_receive_value(message: types.Message, state: FSMContext, db: D
 
         elif field == "text":
             val = message.text if message.text.strip() else None
-            success = db.update_test(test_id, text_content=val)
+            success = await db.update_test(test_id, text_content=val)
             if success:
                 await message.answer(f"{E.CONFIRM} Текст обновлён", reply_markup=get_admin_main_menu())
             else:
@@ -229,7 +229,7 @@ async def session_receive_value(message: types.Message, state: FSMContext, db: D
             await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
 
         elif field == "question":
-            success = db.update_test(test_id, question_text=message.text)
+            success = await db.update_test(test_id, question_text=message.text)
             if success:
                 await message.answer(f"{E.CONFIRM} Вопрос обновлён", reply_markup=get_admin_main_menu())
             else:
@@ -245,7 +245,7 @@ async def session_receive_value(message: types.Message, state: FSMContext, db: D
             if len(options) < 2:
                 await message.answer(f"{E.ERROR} Нужно минимум 2 варианта. Попробуйте снова:", reply_markup=get_admin_main_menu())
                 return
-            success = db.update_test(test_id, options=options)
+            success = await db.update_test(test_id, options=options)
             if success:
                 await message.answer(f"{E.CONFIRM} Варианты обновлены", reply_markup=get_admin_main_menu())
                 await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
@@ -287,7 +287,7 @@ async def session_receive_photo(message: types.Message, state: FSMContext, db: D
             logger.exception("Failed to save photo in edit session")
             photo_path = ""
 
-        success = db.update_test(test_id, photo_file_id=photo_file_id, photo_path=photo_path)
+        success = await db.update_test(test_id, photo_file_id=photo_file_id, photo_path=photo_path)
         if success:
             await message.answer(f"{E.CONFIRM} Картинка обновлена", reply_markup=get_admin_main_menu())
         else:
@@ -324,7 +324,7 @@ async def session_receive_document_image(message: types.Message, state: FSMConte
             logger.exception("Failed to save document image in edit session")
             photo_path = ""
 
-        success = db.update_test(test_id, photo_file_id=file_id, photo_path=photo_path)
+        success = await db.update_test(test_id, photo_file_id=file_id, photo_path=photo_path)
         if success:
             await message.answer(f"{E.CONFIRM} Картинка обновлена", reply_markup=get_admin_main_menu())
         else:
@@ -344,7 +344,7 @@ async def session_done(callback: types.CallbackQuery, state: FSMContext, db: Dat
         callback_data = SessionDoneCB.unpack(callback.data or "")
 
     await state.clear()
-    await callback.message.answer(f"{E.CONFIRM} Редактирование завершено", reply_markup=get_tests_view_keyboard(db.get_all_tests()))
+    await callback.message.answer(f"{E.CONFIRM} Редактирование завершено", reply_markup=get_tests_view_keyboard(await db.get_all_tests()))
     await callback.answer()
 
 
@@ -355,7 +355,7 @@ async def session_cancel(callback: types.CallbackQuery, state: FSMContext, db: D
         callback_data = SessionCancelCB.unpack(callback.data or "")
 
     await state.clear()
-    await callback.message.answer(f"{E.CANCEL} Режим редактирования отменён", reply_markup=get_tests_view_keyboard(db.get_all_tests()))
+    await callback.message.answer(f"{E.CANCEL} Режим редактирования отменён", reply_markup=get_tests_view_keyboard(await db.get_all_tests()))
     await callback.answer()
 
 

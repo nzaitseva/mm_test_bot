@@ -20,7 +20,7 @@ router = Router()
 
 
 async def send_test_to_channel(test_id, channel_id, bot, db: Database):
-    test = db.get_test(test_id)
+    test = await db.get_test(test_id)
     if not test:
         logger.error(f"{E.ERROR} Тест {test_id} не найден для отправки в канал {channel_id}")
         return False
@@ -107,7 +107,7 @@ async def handle_test_answer(callback: types.CallbackQuery, db: Database, callba
             raise
         logger.info(f"📨 Получен callback_data: test_id={test_id}, option={option_text!r}")
 
-        test = db.get_test(test_id)
+        test = await db.get_test(test_id)
         if not test:
             logger.error(f"{E.ERROR} Тест {test_id} не найден")
             await callback.answer(f"{E.ERROR} Тест не найден", show_alert=True)

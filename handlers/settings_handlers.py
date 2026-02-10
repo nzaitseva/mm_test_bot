@@ -2,7 +2,6 @@ import pytz
 import logging
 
 from aiogram import Router, F, types
-from aiogram.fsm.context import FSMContext
 
 from utils.emoji import Emoji as E
 from utils.database import Database
@@ -20,8 +19,8 @@ router.message.filter(IsAdminFilter(config.admin_ids))
 router.callback_query.filter(IsAdminFilter(config.admin_ids))
 
 
-def get_settings_text(db: Database):
-    current_timezone = db.get_timezone()
+async def get_settings_text(db: Database):
+    current_timezone = await db.get_timezone()
     return (
         f"{E.SETTINGS} <b>Настройки бота</b>\n\n"
         f"{E.STAPLE} <b>Текущий часовой пояс:</b> {current_timezone}\n\n"
@@ -31,7 +30,7 @@ def get_settings_text(db: Database):
 
 @router.message(F.text == f"{E.SETTINGS} Настройки")
 async def show_settings(message: types.Message, db: Database):
-    await message.answer(get_settings_text(db), parse_mode="HTML", reply_markup=get_settings_keyboard())
+    await message.answer(await get_settings_text(db), parse_mode="HTML", reply_markup=get_settings_keyboard())
 
 
 @router.callback_query(TimezoneCB.filter(F.tz == "open"))
@@ -42,7 +41,7 @@ async def show_timezone_settings(callback: types.CallbackQuery, db: Database, ca
 
     tz_val = get_callback_value(callback_data, "tz")
     if tz_val == "open":
-        current_timezone = db.get_timezone()
+        current_timezone = await db.get_timezone()
         await callback.message.edit_text(
             f"{E.CLOCK} <b>Настройка часового пояса</b>\n\n"
             f"{E.STAPLE} <b>Текущий пояс:</b> {current_timezone}\n\n"
@@ -66,7 +65,7 @@ async def set_timezone(callback: types.CallbackQuery, db: Database, callback_dat
     if tz == "back":
 
         await callback.message.edit_text(
-            get_settings_text(db),
+            await get_settings_text(db),
             parse_mode="HTML", reply_markup=get_settings_keyboard()
         )
         await callback.answer()
@@ -74,7 +73,7 @@ async def set_timezone(callback: types.CallbackQuery, db: Database, callback_dat
 
     try:
         pytz.timezone(tz)
-        success = db.set_timezone(tz)
+        success = await db.set_timezone(tz)
         if success:
             await callback.message.edit_text(
                 f"{E.SUCCESS} Часовой пояс успешно изменен на:\n<b>{tz}</b>\n\n"
@@ -92,11 +91,9 @@ async def set_timezone(callback: types.CallbackQuery, db: Database, callback_dat
 
 
 @router.callback_query(SettingsCB.filter())
-async def settings_back(callback: types.CallbackQuery, callback_data: dict | None = None, state: FSMContext = None):
+async def settings_back(callback: types.CallbackQuery, callback_data: dict | None = None):
     if callback_data is None:
         callback_data = SettingsCB.unpack(callback.data or "")
-
-    action = get_callback_value(callback_data, "action")
 
     # Try to delete the original message from chat
     try:
@@ -107,16 +104,5 @@ async def settings_back(callback: types.CallbackQuery, callback_data: dict | Non
         except Exception:
             pass
 
-    # Handle different cancel/back actions
-    if action == "back":
-        await callback.message.answer(f"{E.CANCEL} Изменение часового пояса отменено")
-    else:
-        # for action == "cancel" and any other unknown actions
-        try:
-            if state is not None:
-                await state.clear()
-        except Exception:
-            pass
-        await callback.message.answer(f"{E.CANCEL} Действие отменено")
-
+    await callback.message.answer(f"{E.CANCEL} Изменение часового пояса отменено")
     await callback.answer()
