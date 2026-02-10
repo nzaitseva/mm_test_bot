@@ -6,13 +6,14 @@ import pytz
 
 from utils.database import Database
 from utils.callbacks import (
+    DeleteTestCB,
+    ConfirmDeleteTestCB,
+    CancelDeleteTestCB,
     DeleteScheduleCB,
     ConfirmDeleteScheduleCB,
     CancelDeleteScheduleCB,
-    ConfirmDeleteTestCB,
-    CancelDeleteTestCB,
-    DeleteTestCB,
 )
+
 from handlers.admin.main_handlers import (
     request_delete_schedule,
     confirm_delete_schedule,
@@ -51,6 +52,7 @@ class DummyCallback:
         self.answered = True
 
 
+# create test -> add sceduler -> delete scheduler -> call scheduler delete and confirm
 def test_request_and_confirm_delete_schedule_flow():
     async def _inner():
         db_file = tempfile.NamedTemporaryFile(delete=False).name
