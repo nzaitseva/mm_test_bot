@@ -2,6 +2,7 @@ import pytz
 import logging
 
 from aiogram import Router, F, types
+from aiogram.fsm.context import FSMContext
 
 from utils.emoji import Emoji as E
 from utils.database import Database
@@ -91,9 +92,11 @@ async def set_timezone(callback: types.CallbackQuery, db: Database, callback_dat
 
 
 @router.callback_query(SettingsCB.filter())
-async def settings_back(callback: types.CallbackQuery, callback_data: dict | None = None):
+async def settings_back(callback: types.CallbackQuery, callback_data: dict | None = None, state: FSMContext = None):
     if callback_data is None:
         callback_data = SettingsCB.unpack(callback.data or "")
+
+    action = get_callback_value(callback_data, "action")
 
     # Try to delete the original message from chat
     try:
@@ -104,5 +107,16 @@ async def settings_back(callback: types.CallbackQuery, callback_data: dict | Non
         except Exception:
             pass
 
-    await callback.message.answer(f"{E.CANCEL} Изменение часового пояса отменено")
+    # Handle different cancel/back actions
+    if action == "back":
+        await callback.message.answer(f"{E.CANCEL} Изменение часового пояса отменено")
+    else:
+        # for action == "cancel" and any other unknown actions
+        try:
+            if state is not None:
+                await state.clear()
+        except Exception:
+            pass
+        await callback.message.answer(f"{E.CANCEL} Действие отменено")
+
     await callback.answer()

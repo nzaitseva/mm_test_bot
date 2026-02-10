@@ -19,11 +19,22 @@ from aiogram.fsm.context import FSMContext
 from utils.emoji import Emoji as E
 from utils.database import Database
 from utils.config import load_config
-from utils.callbacks import DeleteScheduleCB, ConfirmDeleteScheduleCB, CancelDeleteScheduleCB, \
-    get_callback_value,get_int_callback_value
+from utils.callbacks import (
+    DeleteScheduleCB,
+    ConfirmDeleteScheduleCB,
+    CancelDeleteScheduleCB,
+    get_callback_value,
+    get_int_callback_value
+)
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from filters.admin_filters import IsAdminFilter
-from keyboards.keyboards import get_admin_main_menu, get_tests_view_keyboard, get_settings_keyboard, \
-    get_schedules_list_keyboard, get_confirmation_keyboard
+from keyboards.keyboards import (
+    get_admin_main_menu,
+    get_tests_view_keyboard,
+    get_settings_keyboard,
+    get_schedules_list_keyboard,
+    get_confirmation_keyboard,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -165,3 +176,4 @@ async def cancel_delete_schedule(callback: types.CallbackQuery, callback_data: d
 
     await callback.message.edit_text(f"{E.CANCEL} Удаление отменено")
     await callback.answer()
+
