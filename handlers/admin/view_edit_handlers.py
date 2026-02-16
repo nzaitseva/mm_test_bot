@@ -1,5 +1,5 @@
 """
-View and edit added tests.
+View and edit tests from admin panel.
 """
 import os
 import json
