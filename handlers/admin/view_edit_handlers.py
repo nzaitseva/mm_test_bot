@@ -81,7 +81,8 @@ async def view_test_detail(callback: types.CallbackQuery, state: FSMContext, db:
         logger.exception("Error while sending test detail")
         await state.update_data(last_photo_message_id=None)
 
-    await callback.message.answer(details_text, parse_mode="HTML", reply_markup=get_test_detail_keyboard(test_id))
+    detail_msg = await callback.message.answer(details_text, parse_mode="HTML", reply_markup=get_test_detail_keyboard(test_id))
+    await state.update_data(last_detail_message_id=detail_msg.message_id)
     await callback.answer()
 
 
@@ -97,6 +98,7 @@ async def detail_back(callback: types.CallbackQuery, state: FSMContext, db: Data
         await callback.answer()
         return
 
+    # Delete messages about test details (text info and photo, if any):
     # Delete the photo message if it exists
     data = await state.get_data()
     if last_photo_id := data.get('last_photo_message_id'):
@@ -106,20 +108,23 @@ async def detail_back(callback: types.CallbackQuery, state: FSMContext, db: Data
             pass
         await state.update_data(last_photo_message_id=None)
 
-    await callback.message.answer("Выберите тест для просмотра:", reply_markup=get_tests_view_keyboard(tests))
-    await callback.answer()
+    # Delete the detail message with keyboard before answering
     try:
-        # attempt to delete the detailed message to avoid duplicates
         await callback.message.delete()
     except Exception:
         pass
+
+    await callback.message.answer("Выберите тест для просмотра:",
+        reply_markup=get_tests_view_keyboard(tests)
+    )
+    await callback.answer()
 
 
 @router.callback_query(StartEditCB.filter())
 async def start_edit_session(callback: types.CallbackQuery, state: FSMContext, db: Database, callback_data: dict | None = None):
     logger.info(f"[start_edit_session] user={callback.from_user.id} data={callback.data!r}")
     if callback_data is None:
-        # Разбираем callback через .unpack()
+        # Trying to get the callback via .unpack()
         callback_data = StartEditCB.unpack(callback.data or "")
 
     test_id = get_int_callback_value(callback_data, "test_id")
@@ -131,10 +136,11 @@ async def start_edit_session(callback: types.CallbackQuery, state: FSMContext, d
     await state.set_state(EditSession.choosing_field)
 
     # remove reply keyboard and show inline session keyboard
-    await callback.message.answer(
+    edit_msg = await callback.message.answer(
         "Режим редактирования. Выберите поле для правки:",
         reply_markup=get_edit_session_keyboard(test_id)
     )
+    await state.update_data(last_edit_session_message_id=edit_msg.message_id)
     await callback.answer()
 
 
@@ -211,13 +217,21 @@ async def session_receive_value(message: types.Message, state: FSMContext, db: D
         return
 
     try:
+        # Delete previous edit session message if it exists
+        if last_edit_id := data.get('last_edit_session_message_id'):
+            try:
+                await message.bot.delete_message(message.chat.id, last_edit_id)
+            except Exception:
+                pass
+
         if field == "title":
             success = await db.update_test(test_id, title=message.text)
             if success:
                 await message.answer(f"{E.CONFIRM} Название обновлено", reply_markup=get_admin_main_menu())
             else:
                 await message.answer(f"{E.ERROR} Не удалось обновить название", reply_markup=get_admin_main_menu())
-            await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
+            edit_msg = await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
+            await state.update_data(last_edit_session_message_id=edit_msg.message_id)
 
         elif field == "text":
             val = message.text if message.text.strip() else None
@@ -226,7 +240,8 @@ async def session_receive_value(message: types.Message, state: FSMContext, db: D
                 await message.answer(f"{E.CONFIRM} Текст обновлён", reply_markup=get_admin_main_menu())
             else:
                 await message.answer(f"{E.ERROR} Не удалось обновить текст", reply_markup=get_admin_main_menu())
-            await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
+            edit_msg = await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
+            await state.update_data(last_edit_session_message_id=edit_msg.message_id)
 
         elif field == "question":
             success = await db.update_test(test_id, question_text=message.text)
@@ -234,7 +249,8 @@ async def session_receive_value(message: types.Message, state: FSMContext, db: D
                 await message.answer(f"{E.CONFIRM} Вопрос обновлён", reply_markup=get_admin_main_menu())
             else:
                 await message.answer(f"{E.ERROR} Не удалось обновить вопрос", reply_markup=get_admin_main_menu())
-            await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
+            edit_msg = await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
+            await state.update_data(last_edit_session_message_id=edit_msg.message_id)
 
         elif field == "options":
             options = {}
@@ -248,10 +264,12 @@ async def session_receive_value(message: types.Message, state: FSMContext, db: D
             success = await db.update_test(test_id, options=options)
             if success:
                 await message.answer(f"{E.CONFIRM} Варианты обновлены", reply_markup=get_admin_main_menu())
-                await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
+                edit_msg = await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
+                await state.update_data(last_edit_session_message_id=edit_msg.message_id)
             else:
                 await message.answer(f"{E.ERROR} Не удалось обновить варианты", reply_markup=get_admin_main_menu())
-                await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
+                edit_msg = await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
+                await state.update_data(last_edit_session_message_id=edit_msg.message_id)
         elif field == "photo":
             await message.answer(f"{E.ERROR} Ожидается изображение. Пожалуйста, отправьте его как фото или файл (image/*).", reply_markup=get_admin_main_menu())
         else:
@@ -292,7 +310,8 @@ async def session_receive_photo(message: types.Message, state: FSMContext, db: D
             await message.answer(f"{E.CONFIRM} Картинка обновлена", reply_markup=get_admin_main_menu())
         else:
             await message.answer(f"{E.ERROR} Не удалось обновить картинку", reply_markup=get_admin_main_menu())
-        await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
+        edit_msg = await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
+        await state.update_data(last_edit_session_message_id=edit_msg.message_id)
     except Exception:
         logger.exception("Error updating photo in session")
         await message.answer(f"{E.ERROR} Ошибка при обновлении картинки", reply_markup=get_admin_main_menu())
@@ -329,7 +348,8 @@ async def session_receive_document_image(message: types.Message, state: FSMConte
             await message.answer(f"{E.CONFIRM} Картинка обновлена", reply_markup=get_admin_main_menu())
         else:
             await message.answer(f"{E.ERROR} Не удалось обновить картинку", reply_markup=get_admin_main_menu())
-        await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
+        edit_msg = await message.answer("Режим редактирования. Выберите поле для правки:", reply_markup=get_edit_session_keyboard(test_id))
+        await state.update_data(last_edit_session_message_id=edit_msg.message_id)
     except Exception:
         logger.exception("Error while processing document image in session")
         await message.answer(f"{E.ERROR} Ошибка при обновлении картинки", reply_markup=get_admin_main_menu())
@@ -343,9 +363,38 @@ async def session_done(callback: types.CallbackQuery, state: FSMContext, db: Dat
     if callback_data is None:
         callback_data = SessionDoneCB.unpack(callback.data or "")
 
+    # Delete all edit-related messages
+    data = await state.get_data()
+
+    # Delete the photo message if it exists
+    if last_photo_id := data.get('last_photo_message_id'):
+        try:
+            await callback.bot.delete_message(callback.message.chat.id, last_photo_id)
+        except Exception:
+            pass
+
+    # Delete the detail message if it exists
+    if last_detail_id := data.get('last_detail_message_id'):
+        try:
+            await callback.bot.delete_message(callback.message.chat.id, last_detail_id)
+        except Exception:
+            pass
+
+    # Delete the edit session message with keyboard
+    if last_edit_id := data.get('last_edit_session_message_id'):
+        try:
+            await callback.bot.delete_message(callback.message.chat.id, last_edit_id)
+        except Exception:
+            pass
+
     await state.clear()
     await callback.message.answer(f"{E.CONFIRM} Редактирование завершено", reply_markup=get_tests_view_keyboard(await db.get_all_tests()))
     await callback.answer()
+    try:
+        # Delete the current message (the one with "Done" button)
+        await callback.message.delete()
+    except Exception:
+        pass
 
 
 @router.callback_query(SessionCancelCB.filter())
