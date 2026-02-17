@@ -44,6 +44,16 @@ class Database:
             raise
 
     async def _init_db(self):
+        # helper for migrations (does nothing if column already present)
+        async def _ensure_column(table: str, column: str, definition: str):
+            row = await self._exec(f"PRAGMA table_info({table})", fetchall=True)
+            cols = [r[1] if isinstance(r, tuple) else r['name'] for r in row]
+            if column not in cols:
+                logger.info(f"Adding missing column {column} to {table}")
+                await self._exec(f"ALTER TABLE {table} ADD COLUMN {column} {definition}", commit=True)
+
+        # expose to the class in case future methods need it
+        self._ensure_column = _ensure_column
         await self._exec('''
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
@@ -72,6 +82,9 @@ class Database:
                 is_active BOOLEAN DEFAULT 1
             )
         ''', commit=True)
+
+        # perform simple migrations for existing databases
+        await self._ensure_column('tests', 'photo_path', 'TEXT')
 
         await self._exec('''
             CREATE TABLE IF NOT EXISTS schedule (
