@@ -10,7 +10,7 @@ from keyboards.keyboards import get_tests_list_keyboard, get_confirmation_keyboa
 from states import TestDeletion
 from utils.database import Database
 from utils.emoji import Emoji as E
-from utils.callbacks import DeleteTestCB, ConfirmDeleteTestCB, CancelDeleteTestCB, get_int_callback_value
+from utils.callbacks import DeleteTestCB, CancelCB, ConfirmDeleteTestCB, CancelDeleteTestCB, get_int_callback_value
 from utils.config import load_config
 from filters.admin_filters import IsAdminFilter
 
@@ -32,7 +32,7 @@ async def start_test_deletion(message: types.Message, state: FSMContext, db: Dat
         return
 
     await state.set_state(TestDeletion.waiting_for_test_selection)
-    await message.answer("Выберите тест для удаления:", reply_markup=get_tests_list_keyboard(tests, action="delete"))
+    await message.answer("Выберите тест для удаления:", reply_markup=get_tests_list_keyboard(tests, action="delete", include_cancel=True))
 
 
 @router.callback_query(DeleteTestCB.filter())

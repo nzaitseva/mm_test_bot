@@ -47,9 +47,11 @@ def get_cancel_keyboard():
 """
 
 def get_settings_keyboard():
+    # settings menu now includes explicit cancel button to exit without changes
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=f"{E.CLOCK} Часовой пояс", callback_data=TimezoneCB(tz="open").pack())],
+            [InlineKeyboardButton(text=f"{E.CANCEL} Отмена", callback_data=SettingsCB(action="back").pack())],
         ]
     )
 
@@ -72,8 +74,6 @@ def get_timezone_keyboard():
         buttons.append(row)
 
     buttons.append([InlineKeyboardButton(text=f"{E.BACK} Назад", callback_data=TimezoneCB(tz="back").pack())])
-
-    buttons.append([InlineKeyboardButton(text=f"{E.CANCEL} Отмена", callback_data=SettingsCB(action="back").pack())])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
