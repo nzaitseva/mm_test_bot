@@ -60,6 +60,11 @@ class ConfirmDeleteTestCB(_CB, prefix="confirmdeltest"):
 class CancelDeleteTestCB(_CB, prefix="canceldeltest"):
     test_id: int
 
+
+class ScheduleTestCB(_CB, prefix="scheduletest"):
+    """Callback when user wants to schedule sending directly from test detail view."""
+    test_id: int
+
 class SettingsCB(_CB, prefix="settings"):
     action: str
 

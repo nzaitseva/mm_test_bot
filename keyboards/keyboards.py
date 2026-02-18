@@ -19,6 +19,7 @@ from utils.callbacks import (
     CancelDeleteTestCB,
     SettingsCB,
     CancelCB,
+    ScheduleTestCB,
 )
 
 
@@ -186,10 +187,11 @@ def get_tests_view_keyboard(tests):
 
 
 def get_test_detail_keyboard(test_id):
-    # added delete option so admins can remove a test directly from its detail view
+    # admin actions available when viewing a test
     buttons = [
         [InlineKeyboardButton(text=f"{E.EDIT}️ Редактировать", callback_data=StartEditCB(test_id=test_id).pack()),
          InlineKeyboardButton(text=f"{E.DELETE} Удалить", callback_data=DeleteTestCB(test_id=test_id).pack())],
+        [InlineKeyboardButton(text=f"{E.SCHEDULE} Запланировать отправку", callback_data=ScheduleTestCB(test_id=test_id).pack())],
         [InlineKeyboardButton(text=f"{E.BACK} Назад", callback_data=DetailBackCB(test_id=test_id).pack())]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)

@@ -9,7 +9,7 @@ from keyboards.keyboards import get_tests_list_keyboard, get_cancel_keyboard, ge
 from states import ScheduleCreation, EditSession, TestCreation, TestDeletion, ScheduleDeletion, EditTest
 from utils.database import Database
 from utils.emoji import Emoji as E
-from utils.callbacks import SelectTestCB, CancelCB, get_int_callback_value
+from utils.callbacks import SelectTestCB, ScheduleTestCB, CancelCB, get_int_callback_value
 from utils.config import load_config
 from filters.admin_filters import IsAdminFilter
 
@@ -78,6 +78,26 @@ async def process_test_selection(callback: types.CallbackQuery, state: FSMContex
         await callback.answer()
         return
 
+    await state.update_data(test_id=test_id)
+    await state.set_state(ScheduleCreation.waiting_for_channel)
+    await callback.message.answer(
+        "Введите ID или @username канала (например: @my_channel или -1001234567890):",
+        reply_markup=get_cancel_keyboard()
+    )
+    await callback.answer()
+
+
+@router.callback_query(ScheduleTestCB.filter())
+async def start_scheduling_from_detail(callback: types.CallbackQuery, state: FSMContext, callback_data: dict | None = None):
+    """Begin scheduling flow when triggered from test detail screen."""
+    if callback_data is None:
+        callback_data = ScheduleTestCB.unpack(callback.data or "")
+    test_id = get_int_callback_value(callback_data, "test_id")
+    if test_id is None:
+        await callback.answer()
+        return
+
+    # jump directly to channel input step with test selected
     await state.update_data(test_id=test_id)
     await state.set_state(ScheduleCreation.waiting_for_channel)
     await callback.message.answer(

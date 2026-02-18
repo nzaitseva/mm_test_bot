@@ -86,6 +86,35 @@ class Database:
         # perform simple migrations for existing databases
         await self._ensure_column('tests', 'photo_path', 'TEXT')
 
+        # legacy cleanup: older versions stored a local filesystem path
+        # in `photo_file_id` instead of the new `photo_path` column.  Move
+        # any value that looks like a path into the correct column so that
+        # later code will send the file from disk instead of attempting to
+        # re‑use a bad Telegram file identifier.
+        try:
+            rows = await self._exec(
+                "SELECT id, photo_file_id FROM tests WHERE photo_file_id IS NOT NULL",
+                fetchall=True,
+            )
+            for row in rows:
+                # row can be tuple or sqlite row
+                test_id = row[0] if isinstance(row, tuple) else row['id']
+                fid = row[1] if isinstance(row, tuple) else row['photo_file_id']
+                if fid and (os.path.sep in fid or '/' in fid):
+                    # treat as path if the file exists on disk
+                    if os.path.exists(fid):
+                        logger.info(
+                            f"Migrating legacy photo path for test {test_id}: {fid}"
+                        )
+                        await self._exec(
+                            "UPDATE tests SET photo_path = ?, photo_file_id = NULL WHERE id = ?",
+                            (fid, test_id),
+                            commit=True,
+                        )
+        except Exception:
+            # not critical; log and continue
+            logger.exception("Error during legacy photo_file_id migration")
+
         await self._exec('''
             CREATE TABLE IF NOT EXISTS schedule (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -221,8 +250,11 @@ class Database:
         return (row[0] if row else 0) > 0
 
     async def get_active_schedules(self):
+        # note: we purposely *do not* return test_id here because callers only
+        # need schedule id, title, channel and time.  Previously the query
+        # included test_id which led to unpack errors when iterating.
         rows = await self._exec('''
-            SELECT s.id, s.test_id, t.title, s.channel_id, s.scheduled_time 
+            SELECT s.id, t.title, s.channel_id, s.scheduled_time 
             FROM schedule s 
             JOIN tests t ON s.test_id = t.id 
             WHERE s.is_sent = 0
