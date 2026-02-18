@@ -18,6 +18,7 @@ from utils.callbacks import (
     ConfirmDeleteTestCB,
     CancelDeleteTestCB,
     SettingsCB,
+    CancelCB,
 )
 
 
@@ -87,7 +88,13 @@ def get_content_type_keyboard():
     )
 
 
-def get_tests_list_keyboard(tests, action="select"):
+def get_tests_list_keyboard(tests, action="select", include_cancel: bool = False):
+    """Return an inline list of tests.
+
+    *action* controls the callback type used for each entry (select/delete).
+    *include_cancel* will append a standalone cancel button at the bottom which
+    sends a simple ``CancelCB`` so the caller can abort the flow without typing.
+    """
     buttons = []
     for test_id, title in tests:
         if action == "delete":
@@ -96,6 +103,11 @@ def get_tests_list_keyboard(tests, action="select"):
         else:
             cb = SelectTestCB(test_id=test_id).pack()
             buttons.append([InlineKeyboardButton(text=f"{E.LIST} {title}", callback_data=cb)])
+
+    if include_cancel:
+        # add cancel button as a separate row
+        buttons.append([InlineKeyboardButton(text=f"{E.CANCEL} Отмена", callback_data=CancelCB().pack())])
+
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 

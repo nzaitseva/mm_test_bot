@@ -9,7 +9,7 @@ from keyboards.keyboards import get_tests_list_keyboard, get_cancel_keyboard, ge
 from states import ScheduleCreation, EditSession, TestCreation, TestDeletion, ScheduleDeletion, EditTest
 from utils.database import Database
 from utils.emoji import Emoji as E
-from utils.callbacks import SelectTestCB, get_int_callback_value
+from utils.callbacks import SelectTestCB, CancelCB, get_int_callback_value
 from utils.config import load_config
 from filters.admin_filters import IsAdminFilter
 
@@ -30,7 +30,8 @@ async def start_scheduling(message: types.Message, state: FSMContext, db: Databa
         return
 
     await state.set_state(ScheduleCreation.waiting_for_test_selection)
-    await message.answer("Выберите тест для отправки:", reply_markup=get_tests_list_keyboard(tests))
+    # include inline cancel button so user can abort without typing
+    await message.answer("Выберите тест для отправки:", reply_markup=get_tests_list_keyboard(tests, include_cancel=True))
 
 
 creation_states = [
@@ -83,6 +84,14 @@ async def process_test_selection(callback: types.CallbackQuery, state: FSMContex
         "Введите ID или @username канала (например: @my_channel или -1001234567890):",
         reply_markup=get_cancel_keyboard()
     )
+    await callback.answer()
+
+
+@router.callback_query(CancelCB.filter())
+async def cancel_schedule_callback(callback: types.CallbackQuery, state: FSMContext):
+    """Handle inline cancel button during schedule creation."""
+    await state.clear()
+    await callback.message.answer(f"{E.CANCEL} Действие отменено", reply_markup=get_admin_main_menu())
     await callback.answer()
 
 

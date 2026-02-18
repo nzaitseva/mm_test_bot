@@ -11,6 +11,11 @@ class SelectTestCB(_CB, prefix="select"):
 class DeleteTestCB(_CB, prefix="delete"):
     test_id: int
 
+
+class CancelCB(_CB, prefix="cancel"):
+    """Generic cancel callback used when an inline 'Отмена' button is needed."""
+    # no extra fields
+
 class ViewTestCB(_CB, prefix="view"):
     test_id: int
 
