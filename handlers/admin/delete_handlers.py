@@ -6,7 +6,7 @@ import logging
 from aiogram import Router, F, types
 from aiogram.fsm.context import FSMContext
 
-from keyboards.keyboards import get_tests_list_keyboard, get_confirmation_keyboard
+from keyboards.keyboards import get_tests_list_keyboard, get_confirmation_keyboard, get_tests_view_keyboard
 from states import TestDeletion
 from utils.database import Database
 from utils.emoji import Emoji as E
@@ -77,6 +77,14 @@ async def confirm_test_deletion(callback: types.CallbackQuery, db: Database, cal
         success = await db.delete_test(test_id)
         if success:
             await callback.message.edit_text(f"{E.CONFIRM} Тест «{test_title}» успешно удален!")
+            # after removal, provide updated tests view so user can continue from list
+            try:
+                await callback.message.answer(
+                    "Выберите тест для просмотра:",
+                    reply_markup=get_tests_view_keyboard(await db.get_all_tests()),
+                )
+            except Exception:
+                pass
         else:
             await callback.message.edit_text(f"{E.ERROR} Ошибка при удалении теста «{test_title}»")
 

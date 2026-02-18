@@ -27,7 +27,7 @@ def get_admin_main_menu():
             [KeyboardButton(text=f"{E.CREATE} Создать тест"),
              KeyboardButton(text=f"{E.SCHEDULE} Запланировать отправку")],
             [KeyboardButton(text=f"{E.LIST} Мои тесты"), KeyboardButton(text=f"{E.DELETE} Удалить тест")],
-            [KeyboardButton(text=f"{E.SCHEDULES} Активные расписания"), KeyboardButton(text=f"{E.SETTINGS} Настройки")],
+            [KeyboardButton(text=f"{E.SCHEDULES} Активные расписания"), KeyboardButton(text=f"{E.SETTINGS} Настройки")]
         ],
         resize_keyboard=True,
         one_time_keyboard=False
@@ -48,7 +48,6 @@ def get_settings_keyboard():
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text=f"{E.CLOCK} Часовой пояс", callback_data=TimezoneCB(tz="open").pack())],
-            [InlineKeyboardButton(text=f"{E.CANCEL} Отмена", callback_data=SettingsCB(action="cancel").pack())],
         ]
     )
 
@@ -97,8 +96,6 @@ def get_tests_list_keyboard(tests, action="select"):
         else:
             cb = SelectTestCB(test_id=test_id).pack()
             buttons.append([InlineKeyboardButton(text=f"{E.LIST} {title}", callback_data=cb)])
-    # add a cancel button at the end so user can abort selection
-    buttons.append([InlineKeyboardButton(text=f"{E.CANCEL} Отмена", callback_data=SettingsCB(action="cancel").pack())])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -177,8 +174,10 @@ def get_tests_view_keyboard(tests):
 
 
 def get_test_detail_keyboard(test_id):
+    # added delete option so admins can remove a test directly from its detail view
     buttons = [
-        [InlineKeyboardButton(text=f"{E.EDIT}️ Редактировать", callback_data=StartEditCB(test_id=test_id).pack())],
+        [InlineKeyboardButton(text=f"{E.EDIT}️ Редактировать", callback_data=StartEditCB(test_id=test_id).pack()),
+         InlineKeyboardButton(text=f"{E.DELETE} Удалить", callback_data=DeleteTestCB(test_id=test_id).pack())],
         [InlineKeyboardButton(text=f"{E.BACK} Назад", callback_data=DetailBackCB(test_id=test_id).pack())]
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
